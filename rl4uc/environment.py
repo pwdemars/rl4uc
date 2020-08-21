@@ -439,7 +439,7 @@ class Env(object):
         
         return self.state
 
-def make_env(mode="train", demand=None, reference_demand=None, **params):
+def make_env(mode="train", demand=None, reference_demand=None, seed=None, **params):
     """
     Create an environment object. 
     
@@ -471,6 +471,9 @@ def make_env(mode="train", demand=None, reference_demand=None, **params):
                        (max(reference_demand_scaled) - min(reference_demand_scaled)))
     else:
         raise ValueError("Both demand and reference_demand must be passed to this function")
+    
+    if seed is not None:
+        np.random.seed(seed)
         
     env = Env(gen_info, demand_scaled, demand_norm, mode, **params)
     env.reset()
