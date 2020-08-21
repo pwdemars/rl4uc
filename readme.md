@@ -2,6 +2,16 @@
 
 This project contains an RL environment for the unit commitment problem.
 
+## Installation
+
+You can install this repository by running: 
+
+```
+git clone https://github.com/pwdemars/rl4uc.git
+cd rl4uc
+pip install .
+```
+
 ## Example usage:
 
 Below we will try an action on the 5 generator system. An action is a commitment decision for the following time period, defined by a binary numpy array: 1 indicates that we want to turn (or leave) the generator on, 0 indicates turn or leave it off. 
