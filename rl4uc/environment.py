@@ -17,8 +17,6 @@ DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 1e3
 
-TEST_DAY_LENGTH = 48
-
 class Env(object):
     """
     Environment class holding information about the grid state, the demand 
@@ -27,7 +25,7 @@ class Env(object):
     
     TODO: dispatchable wind
     """
-    def __init__(self, mode='train', **kwargs):
+    def __init__(self, gen_info, demand, demand_norm, mode='train', **kwargs):
         
         modes = ['test', 'train']
         if mode not in modes:
@@ -35,15 +33,16 @@ class Env(object):
         else:
             self.mode = mode # Test or train. Determines the reward function and is_terminal()
         
-        self.gen_info = kwargs.get('gen_info')
-        self.all_demand = kwargs.get('demand')
-        self.all_demand_norm = kwargs.get('demand_norm')
+        self.gen_info = gen_info
+        self.all_demand = demand
+        self.all_demand_norm = demand_norm
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.n_hrs = kwargs.get('n_hrs', DEFAULT_N_HRS)
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
-            self.episode_length = TEST_DAY_LENGTH
+            # 1 less than length of demand since at hour 0 demand is 
+            self.episode_length = len(demand)
         else:
             self.episode_length = kwargs.get('episode_length', DEFAULT_EPISODE_LENGTH)
             
@@ -365,6 +364,7 @@ class Env(object):
             return
         
         horizon = max(0, np.max((self.t_min_down + current_status)[np.where(binary_status == 0)])) # Get the max number of time steps required to determine feasibility
+        horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
             demand = self.all_demand[self.hour+t+1] # Nominal demand for t+1th period ahead
@@ -409,7 +409,7 @@ class Env(object):
         if self.mode == 'train':
             self.hour = np.random.choice(len(self.all_demand) - 2*self.episode_length) # leave some buffer
         else:
-            self.hour = 0
+            self.hour = -1 # Set to 1 period before begin of demand profile.
             
         self.episode_timestep = 0
         self.demand = None
@@ -439,7 +439,7 @@ class Env(object):
         
         return self.state
 
-def make_env(mode="train", **env_params):
+def make_env(mode="train", demand=None, reference_demand=None, **params):
     """
     Create an environment object. 
     
@@ -448,24 +448,31 @@ def make_env(mode="train", **env_params):
     
     valid_gens = [5, 10, 20]
     
-    if env_params.get('num_gen', DEFAULT_NUM_GEN) not in valid_gens:
+    if params.get('num_gen', DEFAULT_NUM_GEN) not in valid_gens:
         raise ValueError("Invalid number of generators: must be one of: {}".format(valid_gens))
         
     script_dir = os.path.dirname(os.path.realpath(__file__))
     
     gen_info = pd.read_csv(os.path.join(script_dir,
-                                        'data/kazarlis_units_' + str(env_params.get('num_gen', DEFAULT_NUM_GEN)) + '_SP.csv'))
-
-    demand = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
-    demand_scaled = scale_demand(demand, demand, gen_info)
-    demand_norm = ((demand_scaled - min(demand_scaled))/
-                   (max(demand_scaled) - min(demand_scaled)))
-
-    env_params.update({'gen_info': gen_info,
-                       'demand': demand_scaled,
-                       'demand_norm': demand_norm})
-            
-    env = Env(mode, **env_params)
+                                        'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '_SP.csv'))
+    
+    if demand is None:
+        # Default demand is National Grid 5 years
+        demand = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
+        demand_scaled = scale_demand(demand, demand, gen_info)
+        demand_norm = ((demand_scaled - min(demand_scaled))/
+                       (max(demand_scaled) - min(demand_scaled)))
+    elif (demand is not None) and (reference_demand is not None):
+        # If both demand and reference_demand are given, then first scale reference demand,
+        # then use scaled reference demand to scale demand...
+        reference_demand_scaled = scale_demand(reference_demand, reference_demand, gen_info)
+        demand_scaled = scale_demand(reference_demand, demand, gen_info)
+        demand_norm = ((demand_scaled - min(reference_demand_scaled))/
+                       (max(reference_demand_scaled) - min(reference_demand_scaled)))
+    else:
+        raise ValueError("Both demand and reference_demand must be passed to this function")
+        
+    env = Env(gen_info, demand_scaled, demand_norm, mode, **params)
     env.reset()
             
     return env

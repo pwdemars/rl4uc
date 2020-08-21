@@ -93,20 +93,14 @@ def scale_demand_old(all_demand, gen_info):
 
 def scale_demand(reference_demand, target_demand, gen_info):
     """
-    Demand is scaled s.t. :
-        - D_min = min_output_bl * 10/9 (where min_output_bl) is the min_output of 
-        the generator with largest max_output;
-        - D_max = sum(max_outputs) * 10/11
-        - D_min < D < D_max
-        
-    This ensures it is always possible to have 10% footroom and 10% headroom 
-    from the nominal demand. 
+    Scale target_demand such that maximum demand gives 10% headroom, and minimum 
+    demand gives 10% footroom.
+    
+    This ensures that the generators in gen_info can meet deviations in demand
+    without switching off baseload (the generator with largest min_output) 
     """
-    
-    bl_idx = np.argmax(gen_info.max_output.values)
-    D_min = gen_info.min_output[bl_idx] * 10/9
-    D_max = np.sum(gen_info.max_output) * 10/11
-    
+    D_min = np.max(gen_info.min_output) * 10/9 # 10% footroom
+    D_max = np.sum(gen_info.max_output) * 10/11 # 10% headroom
     
     new_demand = ((target_demand - np.min(reference_demand))/np.ptp(reference_demand))*(D_max - D_min) + D_min
     
