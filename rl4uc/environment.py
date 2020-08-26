@@ -114,6 +114,16 @@ class Env(object):
         outputs = np.array(gen_info['max_output'][:num_gen])
         pl = (a*(outputs**2) + b*outputs + c)/outputs
         return pl
+    
+    def sample_demand(self):
+        """ 
+        Sample a realisation of demand. 
+        
+        Change the demand distribution by editing this function. 
+        """
+        return np.clip(self.demand * np.random.normal(1, self.demand_uncertainty),
+                       self.min_demand,
+                       self.max_demand)
         
     def step(self, action):
         """
@@ -133,6 +143,9 @@ class Env(object):
         self.hour += 1
         self.demand = self.all_demand[self.hour%len(self.all_demand)]
         self.demand_norm = self.all_demand_norm[self.hour%len(self.all_demand)]
+        
+        # Sample demand realisation
+        self.demand_real = self.sample_demand()
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
@@ -157,14 +170,15 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'timestep_norm': self.episode_timestep/self.episode_length}
+                      'demand_real': self.demand_real}
         
-        reward = self.get_reward()
+        reward = self.get_reward(self.demand_real)
+        
         done = self.is_terminal()
         
         return self.state, reward, done
     
-    def get_reward(self):
+    def get_reward(self, demand_real):
         """
         Calculate the reward.
         
@@ -174,13 +188,8 @@ class Env(object):
         If testing, it is always the negative expected cost (lost load is penalised)
         at VOLL.
         """
-        demand_real = np.clip(self.demand * np.random.normal(1, self.demand_uncertainty),
-                              self.min_demand,
-                              self.max_demand)
-        
         # Calculate fuel cost and dispatch for the demand realisation 
         fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
-        self.last_dispatch = disp
 
         diff = abs(demand_real - np.sum(disp))
         ens = diff if diff > self.dispatch_tolerance else 0
@@ -193,7 +202,6 @@ class Env(object):
         # Operating cost is the sum of fuel cost, ENS cost and start cost.
         # Start cost is not variable: it doesn't depend on demand realisation.
         operating_cost = fuel_cost + ens_cost + self.start_cost
-        self.last_operating_cost = operating_cost
         
         # Spare capacity penalty:
         reserve_margin = np.dot(self.grid_state, self.max_output)/self.demand - 1
@@ -206,6 +214,17 @@ class Env(object):
             reward = -operating_cost
 
         return reward
+    
+    def sample_reward(self):
+        """
+        Generate a new realisation of demand and calculate reward. 
+        
+        This effectively calculates the reward for a state s' that is indentical
+        in all ways except demand realisation. It can therefore be used to estimate 
+        expected reward for a (state, action) pair.
+        """
+        demand_real = self.sample_demand()
+        return self.get_reward(demand_real)
         
     def get_demand_forecast(self):
         """
