@@ -158,9 +158,6 @@ class Env(object):
         # Get available actions
         self.determine_constraints()
         
-        # Check feasibility
-        self.determine_feasibility() 
-        
         # Cap and normalise status
         self.cap_and_normalise_status()
         
@@ -379,7 +376,7 @@ class Env(object):
         x_max = self.t_min_up
         self.status_norm = 2*(self.status_capped - x_min) / (x_max - x_min) - 1
         
-    def determine_feasibility(self): 
+    def is_feasible(self): 
         """
         Determine whether there is enough capacity to meet nominal demand in 
         current and future periods considering minimum down time constraints.    
@@ -388,15 +385,14 @@ class Env(object):
         demand (min_output constraints are violated): this is typically 
         less common.
         """
-        # Infeasible if demand can't be met in current period. 
-        if np.dot(self.grid_state, self.max_output) < self.demand:
-            self.infeasible = True
-            return
+        # Infeasible if demand can't be met in current period (except in initial period)
+        if self.episode_timestep > 0:
+            if np.dot(self.grid_state, self.max_output) < self.demand:
+                return False
         
         # If all generators are on, demand can definitely be met (upwards)
         if np.all(self.grid_state):
-            self.infeasible = False
-            return
+            return True
         
         # Determine how many timesteps ahead we need to consider
         horizon = max(0, np.max((self.t_min_down + self.status)[np.where(self.grid_state == 0)])) # Get the max number of time steps required to determine feasibility
@@ -410,11 +406,10 @@ class Env(object):
             available_cap = np.dot(available_generators, self.max_output)
             
             if available_cap < demand:
-                self.infeasible = True 
-                return
+                return False
         
-        # If all of the above is satisfied, set self.infeasible to False 
-        self.infeasible = False
+        # If all of the above is satisfied, return True 
+        return True
 
     def is_terminal(self):
         """
@@ -453,9 +448,6 @@ class Env(object):
         self.status = self.gen_info['status'].to_numpy()
         self.grid_state = np.where(self.status > 0, 1, 0)
         self.determine_constraints()
-        
-        # Assume we don't need to check feasibility when resetting
-#        self.determine_feasibility()
         
         # Cap and normalise
         self.cap_and_normalise_status()
