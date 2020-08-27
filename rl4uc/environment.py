@@ -85,6 +85,7 @@ class Env(object):
         self.demand = None
         self.demand_norm = None
         self.start_cost = 0
+        self.infeasible=False
         
     def determine_constraints(self):
         """
@@ -158,7 +159,7 @@ class Env(object):
         self.determine_constraints()
         
         # Check feasibility
-        self.determine_feasibility()
+        self.determine_feasibility() 
         
         # Cap and normalise status
         self.cap_and_normalise_status()
@@ -171,6 +172,15 @@ class Env(object):
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
                       'demand_real': self.demand_real}
+        
+        # Calculate fuel cost and dispatch for the demand realisation 
+        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
+        
+        # Calculating lost load costs and marking ENS
+        diff = abs(self.demand_real - np.sum(self.disp))
+        ens_amount = diff if diff > self.dispatch_tolerance else 0
+        self.ens_cost = ens_amount*self.voll*self.n_hrs
+        self.ens = True if ens_amount > 0 else False
         
         reward = self.get_reward(self.demand_real)
         
@@ -188,28 +198,16 @@ class Env(object):
         If testing, it is always the negative expected cost (lost load is penalised)
         at VOLL.
         """
-        # Calculate fuel cost and dispatch for the demand realisation 
-        fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
-
-        diff = abs(demand_real - np.sum(disp))
-        ens = diff if diff > self.dispatch_tolerance else 0
-        ens_cost = ens*self.voll*self.n_hrs
-        
-        # Mark env as having ENS
-        if ens > 0:
-            self.ens = True
-        
         # Operating cost is the sum of fuel cost, ENS cost and start cost.
         # Start cost is not variable: it doesn't depend on demand realisation.
-        operating_cost = fuel_cost + ens_cost + self.start_cost
-        
-        # Spare capacity penalty:
-        reserve_margin = np.dot(self.grid_state, self.max_output)/self.demand - 1
-        excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
+        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
         
         if self.mode == 'train':
-            lost_load_reward = self.min_reward
-            reward = lost_load_reward if self.ens else -operating_cost - excess_capacity_penalty
+            # Spare capacity penalty:
+            reserve_margin = np.dot(self.grid_state, self.max_output)/self.demand - 1
+            excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
+
+            reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
         else: 
             reward = -operating_cost
 
@@ -219,12 +217,24 @@ class Env(object):
         """
         Generate a new realisation of demand and calculate reward. 
         
-        This effectively calculates the reward for a state s' that is indentical
+        This effectively calculates the reward for a state s' that is indentical to self
         in all ways except demand realisation. It can therefore be used to estimate 
         expected reward for a (state, action) pair.
         """
+        if self.mode == "train":
+            raise ValueError("Sample reward is not yet available in training mode")
+        
         demand_real = self.sample_demand()
-        return self.get_reward(demand_real)
+        
+        fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
+        
+        diff = abs(demand_real - np.sum(disp))
+        ens_amount = diff if diff > self.dispatch_tolerance else 0
+        ens_cost = ens_amount*self.voll*self.n_hrs
+        
+        operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
+        
+        return -operating_cost
         
     def get_demand_forecast(self):
         """
@@ -371,33 +381,39 @@ class Env(object):
         
     def determine_feasibility(self): 
         """
-        Determine whether the current environment can feasibly meet the nominal demand
-        in subsequent periods (until min down time constraints have been lifted).
-        """
-    
-        current_status = self.status
-        binary_status = np.where(current_status > 0, 1, 0)
+        Determine whether there is enough capacity to meet nominal demand in 
+        current and future periods considering minimum down time constraints.    
         
-        if np.all(binary_status): # If all generators are on, then feasible
+        This does not consider case where there is not enough footroom to meet 
+        demand (min_output constraints are violated): this is typically 
+        less common.
+        """
+        # Infeasible if demand can't be met in current period. 
+        if np.dot(self.grid_state, self.max_output) < self.demand:
+            self.infeasible = True
+            return
+        
+        # If all generators are on, demand can definitely be met (upwards)
+        if np.all(self.grid_state):
             self.infeasible = False
             return
         
-        horizon = max(0, np.max((self.t_min_down + current_status)[np.where(binary_status == 0)])) # Get the max number of time steps required to determine feasibility
+        # Determine how many timesteps ahead we need to consider
+        horizon = max(0, np.max((self.t_min_down + self.status)[np.where(self.grid_state == 0)])) # Get the max number of time steps required to determine feasibility
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
             demand = self.all_demand[self.hour+t+1] # Nominal demand for t+1th period ahead
-            future_status = current_status + t*np.where(current_status >0, 1, -1) # Assume all generators are kept on where possible
+            future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
-            available_generators = (-future_status >= self.t_min_down) | binary_status # Determines the availability of generators as binary array
+            available_generators = (-future_status >= self.t_min_down) | self.grid_state # Determines the availability of generators as binary array
             available_cap = np.dot(available_generators, self.max_output)
             
-            if available_cap >= demand:
-                continue
-            else:
-                self.infeasible = True
+            if available_cap < demand:
+                self.infeasible = True 
                 return
-                
+        
+        # If all of the above is satisfied, set self.infeasible to False 
         self.infeasible = False
 
     def is_terminal(self):
@@ -410,7 +426,7 @@ class Env(object):
         When testing, terminal states only occur at the end of the episode. 
         """
         if self.mode == "train":
-            return (self.episode_timestep == self.episode_length) or self.ens or self.infeasible
+            return (self.episode_timestep == self.episode_length) or self.ens
         else: 
             return self.episode_timestep == self.episode_length
     
@@ -438,8 +454,8 @@ class Env(object):
         self.grid_state = np.where(self.status > 0, 1, 0)
         self.determine_constraints()
         
-        # Check feasibility
-        self.determine_feasibility()
+        # Assume we don't need to check feasibility when resetting
+#        self.determine_feasibility()
         
         # Cap and normalise
         self.cap_and_normalise_status()
