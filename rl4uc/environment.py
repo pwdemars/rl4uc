@@ -228,10 +228,11 @@ class Env(object):
         diff = abs(demand_real - np.sum(disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.n_hrs
+        is_ens = ens_amount > 0
         
         operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
         
-        return -operating_cost
+        return -operating_cost, is_ens
         
     def get_demand_forecast(self):
         """
@@ -496,8 +497,14 @@ def make_env(mode="train", demand=None, reference_demand=None, seed=None, **para
         demand_scaled = scale_demand(reference_demand, demand, gen_info)
         demand_norm = ((demand_scaled - min(reference_demand_scaled))/
                        (max(reference_demand_scaled) - min(reference_demand_scaled)))
+    elif (demand is not None) and (reference_demand is None):
+        # This can be used when the normalised demand is not needed: for instance,
+        # when just testing a schedule through the environment (without any policy).
+        # In this case the demand should already be scaled
+        demand_scaled = demand
+        demand_norm = (demand_scaled - np.min(demand_scaled)) / np.ptp(demand_scaled)
     else:
-        raise ValueError("Both demand and reference_demand must be passed to this function")
+        raise ValueError("Can't pass `reference_demand` on its own. Must provide `demand`")
     
     if seed is not None:
         np.random.seed(seed)
