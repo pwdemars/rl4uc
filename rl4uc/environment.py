@@ -242,7 +242,7 @@ class Env(object):
         forecast_length periods. Used to update the state attribute. 
         """
         a = self.hour+1
-        z = self.hour+1+self.forecast_length
+        z = self.end_hour+1
         demand_forecast = self.all_demand[a:z]
         demand_forecast_norm = self.all_demand_norm[a:z]
         return demand_forecast, demand_forecast_norm
@@ -440,9 +440,12 @@ class Env(object):
         
         # Initialise timestep and choose random hour to begin episode 
         if self.mode == 'train':
-            self.hour = np.random.choice(len(self.all_demand) - 2*self.episode_length) # leave some buffer
+            self.start_hour = self.hour = np.random.choice(len(self.all_demand) - 2*self.episode_length) # leave some buffer
         else:
-            self.hour = -1 # Set to 1 period before begin of demand profile.
+            self.start_hour = self.hour = -1 # Set to 1 period before begin of demand profile.
+        
+        # Set end peiod
+        self.end_hour = self.start_hour + self.episode_length
             
         self.episode_timestep = 0
         self.demand = None
