@@ -9,7 +9,8 @@ from .generate_demand import scale_demand
 
 DEFAULT_VOLL=1000
 DEFAULT_EPISODE_LENGTH=336
-DEFAULT_N_HRS=0.5
+DEFAULT_DISPATCH_RESOLUTION=0.5
+DEFAULT_DISPATCH_FREQ_MINS=30
 DEFAULT_UNCERTAINTY_PARAM=0.
 DEFAULT_MIN_REWARD_SCALE=-1500
 DEFAULT_NUM_GEN=5
@@ -38,7 +39,8 @@ class Env(object):
         self.all_demand_norm = demand_norm
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
-        self.n_hrs = kwargs.get('n_hrs', DEFAULT_N_HRS)
+        self.dispatch_freq_min = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
+        self.dispatch_resolution = self.dispatch_freq_min/60.
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
             # 1 less than length of demand since at hour 0 demand is 
@@ -176,7 +178,7 @@ class Env(object):
         # Calculating lost load costs and marking ENS
         diff = abs(self.demand_real - np.sum(self.disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
-        self.ens_cost = ens_amount*self.voll*self.n_hrs
+        self.ens_cost = ens_amount*self.voll*self.dispatch_resolution
         self.ens = True if ens_amount > 0 else False
         
         reward = self.get_reward(self.demand_real)
@@ -227,7 +229,7 @@ class Env(object):
         
         diff = abs(demand_real - np.sum(disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
-        ens_cost = ens_amount*self.voll*self.n_hrs
+        ens_cost = ens_amount*self.voll*self.dispatch_resolution
         is_ens = ens_amount > 0
         
         operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
@@ -338,7 +340,7 @@ class Env(object):
             # Energy-not-served costs
             diff = abs(d - sum(disp))
             ens = diff if diff > self.dispatch_tolerance else 0
-            ens_cost = ens*self.voll*self.n_hrs
+            ens_cost = ens*self.voll*self.dispatch_resolution
 
             average_cost += sigmas[i]*(fuel_cost + ens_cost)
             average_ens_cost += sigmas[i]*ens_cost
@@ -469,34 +471,50 @@ class Env(object):
 
 def make_env(mode="train", demand=None, reference_demand=None, seed=None, **params):
     """
-    Create an environment object. 
+    Create an environment. 
     
     The params file must include the number of generators 
     """
     
     valid_gens = [5, 10, 20]
+    valid_dispatch_freq_mins = [5, 15, 30]
     
     if params.get('num_gen', DEFAULT_NUM_GEN) not in valid_gens:
         raise ValueError("Invalid number of generators: must be one of: {}".format(valid_gens))
         
+    if params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) not in valid_dispatch_freq_mins:
+        raise ValueError("Invalid dispatch frequency: must be one of: {} minutes".format(valid_dispatch_freq_mins))
+        
     script_dir = os.path.dirname(os.path.realpath(__file__))
     
-    gen_info = pd.read_csv(os.path.join(script_dir,
-                                        'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '_SP.csv'))
+    # Get original kazarlis unit data (at 1 hour resolution)
+    gen_info_fn = 'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '.csv'
+    gen_info = pd.read_csv(os.path.join(script_dir, gen_info_fn))
+    
+    # Scale constraint times and initial status (in periods) with dispatch frequency
+    # E.g. if dispatch frequency is 30 mins, multiply by 2. 
+    gen_info.t_min_up = gen_info.t_min_up * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info.t_min_down = gen_info.t_min_down * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info.status = gen_info.status * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info = gen_info.astype({'t_min_down': 'int64',
+                                't_min_up': 'int64',
+                                'status': 'int64'})
     
     if demand is None:
-        # Default demand is National Grid 5 years
+        # Default demand is National Grid 5 years, at 30 mins resolution
         demand = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
+        
+        # Interpolate the demand 
+        demand = np.array([np.linspace(demand[i], demand[i+1], (int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))+1))[:-1] for i in range(demand.size-1)]).flatten()
+        
         demand_scaled = scale_demand(demand, demand, gen_info)
-        demand_norm = ((demand_scaled - min(demand_scaled))/
-                       (max(demand_scaled) - min(demand_scaled)))
+        demand_norm = (demand_scaled - min(demand_scaled))/np.ptp(demand_scaled)
     elif (demand is not None) and (reference_demand is not None):
         # If both demand and reference_demand are given, then first scale reference demand,
         # then use scaled reference demand to scale demand...
         reference_demand_scaled = scale_demand(reference_demand, reference_demand, gen_info)
         demand_scaled = scale_demand(reference_demand, demand, gen_info)
-        demand_norm = ((demand_scaled - min(reference_demand_scaled))/
-                       (max(reference_demand_scaled) - min(reference_demand_scaled)))
+        demand_norm = (demand_scaled - min(reference_demand_scaled))/np.ptp(reference_demand_scaled)
     elif (demand is not None) and (reference_demand is None):
         # This can be used when the normalised demand is not needed: for instance,
         # when just testing a schedule through the environment (without any policy).
