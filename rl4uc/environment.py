@@ -360,7 +360,7 @@ class Env(object):
         disp = self.economic_dispatch(self.grid_state, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = sum(calculate_costs(disp, self.a, self.b, self.c))
+        fuel_cost = sum(calculate_costs(disp, self.a, self.b, self.c, self.dispatch_resolution))
         
         return fuel_cost, disp
         

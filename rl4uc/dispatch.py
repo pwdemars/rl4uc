@@ -45,7 +45,7 @@ def calculate_loads(lm, a, b, mins, maxs, num_gen):
     powers = np.where(p < mins, mins, np.where(p > maxs, maxs, p))
     return powers
 
-def calculate_costs(outputs, a, b, c, dispatch_resolution=0.5):
+def calculate_costs(outputs, a, b, c, dispatch_resolution):
     """Calculate production costs. Quadratic cost curves are of the form 
     cost = (a^2(x) + b(x) + c)*time_in_hours
     
