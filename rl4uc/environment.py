@@ -488,7 +488,7 @@ def make_env(mode="train", demand=None, reference_demand=None, **params):
     if params.get('num_gen', DEFAULT_NUM_GEN) not in valid_gens:
         raise ValueError("Invalid number of generators: must be one of: {}".format(valid_gens))
         
-    if params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) not in valid_dispatch_freq_mins:
+    if params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) not in valid_dispatch_freq_mins:
         raise ValueError("Invalid dispatch frequency: must be one of: {} minutes".format(valid_dispatch_freq_mins))
         
     script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -499,9 +499,9 @@ def make_env(mode="train", demand=None, reference_demand=None, **params):
     
     # Scale constraint times and initial status (in periods) with dispatch frequency
     # E.g. if dispatch frequency is 30 mins, multiply by 2. 
-    gen_info.t_min_up = gen_info.t_min_up * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    gen_info.t_min_down = gen_info.t_min_down * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    gen_info.status = gen_info.status * (60/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info.t_min_up = gen_info.t_min_up * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info.t_min_down = gen_info.t_min_down * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    gen_info.status = gen_info.status * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
     gen_info = gen_info.astype({'t_min_down': 'int64',
                                 't_min_up': 'int64',
                                 'status': 'int64'})
@@ -509,9 +509,12 @@ def make_env(mode="train", demand=None, reference_demand=None, **params):
     if demand is None:
         # Default demand is National Grid 5 years, at 30 mins resolution
         demand = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
-        
-        # Interpolate the demand 
-        demand = np.array([np.linspace(demand[i], demand[i+1], (int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))+1))[:-1] for i in range(demand.size-1)]).flatten()
+            
+        # Interpolate demand
+        upsample_factor = int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+        xp = np.arange(0, demand.size)*upsample_factor
+        x = np.arange(xp[-1])
+        demand = np.interp(x, xp, demand)
         
         demand_scaled = scale_demand(demand, demand, gen_info)
         demand_norm = (demand_scaled - min(demand_scaled))/np.ptp(demand_scaled)
