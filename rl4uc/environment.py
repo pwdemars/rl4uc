@@ -12,11 +12,11 @@ DEFAULT_EPISODE_LENGTH=336
 DEFAULT_DISPATCH_RESOLUTION=0.5
 DEFAULT_DISPATCH_FREQ_MINS=30
 DEFAULT_UNCERTAINTY_PARAM=0.
-DEFAULT_MIN_REWARD_SCALE=-1500
+DEFAULT_MIN_REWARD_SCALE=-3000
 DEFAULT_NUM_GEN=5
 DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
-DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 1e3
+DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 2e3
 
 class Env(object):
     """
@@ -39,8 +39,8 @@ class Env(object):
         self.all_demand_norm = demand_norm
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
-        self.dispatch_freq_min = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
-        self.dispatch_resolution = self.dispatch_freq_min/60.
+        self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
+        self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
             # 1 less than length of demand since at hour 0 demand is 
@@ -50,12 +50,15 @@ class Env(object):
             
         # Min reward is a function of number of generators and episode length
         self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
-                           self.num_gen )
+                           self.num_gen *
+                           self.dispatch_resolution) 
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
-        self.excess_capacity_penalty_factor = self.num_gen * kwargs.get('excess_capacity_penalty_factor', 
-                                                               DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR)
+        self.excess_capacity_penalty_factor = (self.num_gen * 
+                                               kwargs.get('excess_capacity_penalty_factor', 
+                                                               DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
+                                               self.dispatch_resolution)
         
         # Generator info
         self.max_output = self.gen_info['max_output'].to_numpy()
@@ -472,7 +475,7 @@ class Env(object):
         
         return self.state
 
-def make_env(mode="train", demand=None, reference_demand=None, seed=None, **params):
+def make_env(mode="train", demand=None, reference_demand=None, **params):
     """
     Create an environment. 
     
@@ -526,9 +529,6 @@ def make_env(mode="train", demand=None, reference_demand=None, seed=None, **para
         demand_norm = (demand_scaled - np.min(demand_scaled)) / np.ptp(demand_scaled)
     else:
         raise ValueError("Can't pass `reference_demand` on its own. Must provide `demand`")
-    
-    if seed is not None:
-        np.random.seed(seed)
         
     env = Env(gen_info, demand_scaled, demand_norm, mode, **params)
     env.reset()
