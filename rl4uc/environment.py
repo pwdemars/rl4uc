@@ -26,7 +26,7 @@ class Env(object):
     
     TODO: dispatchable wind
     """
-    def __init__(self, gen_info, demand, demand_norm, mode='train', **kwargs):
+    def __init__(self, gen_info, forecast, forecast_norm, mode='train', **kwargs):
         
         modes = ['test', 'train']
         if mode not in modes:
@@ -35,8 +35,8 @@ class Env(object):
             self.mode = mode # Test or train. Determines the reward function and is_terminal()
         
         self.gen_info = gen_info
-        self.all_demand = demand
-        self.all_demand_norm = demand_norm
+        self.all_forecast = forecast
+        self.all_forecast_norm = forecast
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
@@ -44,7 +44,7 @@ class Env(object):
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
             # 1 less than length of demand since at hour 0 demand is 
-            self.episode_length = len(demand)
+            self.episode_length = len(forecast)
         else:
             self.episode_length = kwargs.get('episode_length', DEFAULT_EPISODE_LENGTH)
             
@@ -87,8 +87,8 @@ class Env(object):
         self.gen_info['heat_rates'] = self.heat_rates
         
         self.state = None
-        self.demand = None
-        self.demand_norm = None
+        self.forecast = None
+        self.forecast_norm = None
         self.start_cost = 0
         self.infeasible=False
         
@@ -127,10 +127,20 @@ class Env(object):
         
         Change the demand distribution by editing this function. 
         """
-        return np.clip(self.demand * np.random.normal(1, self.demand_uncertainty),
+        return np.clip(self.forecast * np.random.normal(1, self.demand_uncertainty),
                        self.min_demand,
                        self.max_demand)
+    
+    def sample_error(self):
+        """
+        Sample a realisation of demand forecast error using first order 
+        auto-regressive moving average. 
+        """
+        z = np.random.normal(0, self.arma_sigma)
+        error = self.arma_alpha*self.arma_x + z + self.arma_beta*self.arma_z
         
+        return error
+    
     def step(self, action):
         """
         Transition a timestep forward following an action.
@@ -147,8 +157,8 @@ class Env(object):
         # Advance demand 
         self.episode_timestep += 1
         self.hour += 1
-        self.demand = self.all_demand[self.hour%len(self.all_demand)]
-        self.demand_norm = self.all_demand_norm[self.hour%len(self.all_demand)]
+        self.forecast = self.all_forecast[self.hour]
+        self.forecast_norm = self.all_forecast_norm[self.hour]
         
         # Sample demand realisation
         self.demand_real = self.sample_demand()
@@ -206,7 +216,7 @@ class Env(object):
         
         if self.mode == 'train':
             # Spare capacity penalty:
-            reserve_margin = np.dot(self.grid_state, self.max_output)/self.demand - 1
+            reserve_margin = np.dot(self.grid_state, self.max_output)/self.forecast - 1
             excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
 
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
@@ -246,8 +256,8 @@ class Env(object):
         """
         a = self.hour+1
         z = self.end_hour+1
-        demand_forecast = self.all_demand[a:z]
-        demand_forecast_norm = self.all_demand_norm[a:z]
+        demand_forecast = self.all_forecast[a:z]
+        demand_forecast_norm = self.all_forecast_norm[a:z]
         return demand_forecast, demand_forecast_norm
         
     def update_gen_status(self, action):
@@ -330,8 +340,8 @@ class Env(object):
             # Weights for sum (based on normal distribution CDF)
             sigmas = [0.023, 0.136, 0.682, 0.136, 0.023]
             
-            a = np.tile(self.demand, 5)
-            b = np.array([self.demand*self.scale*i for i in range(-2,3)])
+            a = np.tile(self.forecast, 5)
+            b = np.array([self.forecast*self.scale*i for i in range(-2,3)])
             demands = a+b
             
         average_cost = 0
@@ -393,7 +403,7 @@ class Env(object):
         """
         # Infeasible if demand can't be met in current period (except in initial period)
         if self.episode_timestep > 0:
-            if np.dot(self.grid_state, self.max_output) < self.demand:
+            if np.dot(self.grid_state, self.max_output) < self.forecast:
                 return False
         
         # If all generators are on, demand can definitely be met (upwards)
@@ -405,7 +415,7 @@ class Env(object):
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
-            demand = self.all_demand[self.hour+t+1] # Nominal demand for t+1th period ahead
+            demand = self.all_forecast[self.hour+t+1] # Nominal demand for t+1th period ahead
             future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
             available_generators = (-future_status >= self.t_min_down) | self.grid_state # Determines the availability of generators as binary array
@@ -443,7 +453,7 @@ class Env(object):
         
         # Initialise timestep and choose random hour to begin episode 
         if self.mode == 'train':
-            self.start_hour = self.hour = np.random.choice(len(self.all_demand) - 2*self.episode_length) # leave some buffer
+            self.start_hour = self.hour = np.random.choice(len(self.all_forecast) - 2*self.episode_length) # leave some buffer
         else:
             self.start_hour = self.hour = -1 # Set to 1 period before begin of demand profile.
         
@@ -451,7 +461,7 @@ class Env(object):
         self.end_hour = self.start_hour + self.episode_length
             
         self.episode_timestep = 0
-        self.demand = None
+        self.forecast = None
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
@@ -475,7 +485,7 @@ class Env(object):
         
         return self.state
 
-def make_env(mode="train", demand=None, reference_demand=None, **params):
+def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     """
     Create an environment. 
     
@@ -506,34 +516,34 @@ def make_env(mode="train", demand=None, reference_demand=None, **params):
                                 't_min_up': 'int64',
                                 'status': 'int64'})
     
-    if demand is None:
-        # Default demand is National Grid 5 years, at 30 mins resolution
-        demand = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
+    if forecast is None:
+        # Default forecast is National Grid 5 years, at 30 mins resolution
+        forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
             
-        # Interpolate demand
+        # Interpolate forecast
         upsample_factor = int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-        xp = np.arange(0, demand.size)*upsample_factor
+        xp = np.arange(0, forecast.size)*upsample_factor
         x = np.arange(xp[-1])
-        demand = np.interp(x, xp, demand)
+        forecast = np.interp(x, xp, forecast)
         
-        demand_scaled = scale_demand(demand, demand, gen_info)
-        demand_norm = (demand_scaled - min(demand_scaled))/np.ptp(demand_scaled)
-    elif (demand is not None) and (reference_demand is not None):
-        # If both demand and reference_demand are given, then first scale reference demand,
-        # then use scaled reference demand to scale demand...
-        reference_demand_scaled = scale_demand(reference_demand, reference_demand, gen_info)
-        demand_scaled = scale_demand(reference_demand, demand, gen_info)
-        demand_norm = (demand_scaled - min(reference_demand_scaled))/np.ptp(reference_demand_scaled)
-    elif (demand is not None) and (reference_demand is None):
-        # This can be used when the normalised demand is not needed: for instance,
+        forecast_scaled = scale_demand(forecast, forecast, gen_info)
+        forecast_norm = (forecast_scaled - min(forecast_scaled))/np.ptp(forecast_scaled)
+    elif (forecast is not None) and (reference_forecast is not None):
+        # If both forecast and reference_forecast are given, then first scale reference forecast,
+        # then use scaled reference forecast to scale forecast...
+        reference_forecast_scaled = scale_demand(reference_forecast, reference_forecast, gen_info)
+        forecast_scaled = scale_demand(reference_forecast, forecast, gen_info)
+        forecast_norm = (forecast_scaled - min(reference_forecast_scaled))/np.ptp(reference_forecast_scaled)
+    elif (forecast is not None) and (reference_forecast is None):
+        # This can be used when the normalised forecast is not needed: for instance,
         # when just testing a schedule through the environment (without any policy).
-        # In this case the demand should already be scaled
-        demand_scaled = demand
-        demand_norm = (demand_scaled - np.min(demand_scaled)) / np.ptp(demand_scaled)
+        # In this case the forecast should already be scaled
+        forecast_scaled = forecast
+        forecast_norm = (forecast_scaled - np.min(forecast_scaled)) / np.ptp(forecast_scaled)
     else:
-        raise ValueError("Can't pass `reference_demand` on its own. Must provide `demand`")
+        raise ValueError("Can't pass `reference_forecast` on its own. Must provide `forecast`")
         
-    env = Env(gen_info, demand_scaled, demand_norm, mode, **params)
+    env = Env(gen_info, forecast_scaled, forecast_norm, mode, **params)
     env.reset()
             
     return env
