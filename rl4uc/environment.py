@@ -55,6 +55,13 @@ class Env(object):
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
+        # Parameters for ARMA
+        self.arma_sigma = np.mean(forecast)/100
+        self.arma_x = 0
+        self.arma_z = 0
+        self.arma_alpha = 0.95
+        self.arma_beta = 0.02
+        
         self.excess_capacity_penalty_factor = (self.num_gen * 
                                                kwargs.get('excess_capacity_penalty_factor', 
                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
