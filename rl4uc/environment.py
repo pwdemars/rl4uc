@@ -138,6 +138,8 @@ class Env(object):
         """
         z = np.random.normal(0, self.arma_sigma)
         error = self.arma_alpha*self.arma_x + z + self.arma_beta*self.arma_z
+        self.arma_z = z
+        self.arma_x = error        
         
         return error
     
@@ -161,7 +163,7 @@ class Env(object):
         self.forecast_norm = self.all_forecast_norm[self.hour]
         
         # Sample demand realisation
-        self.demand_real = self.sample_demand()
+        self.demand_real = self.forecast + self.sample_error()
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
