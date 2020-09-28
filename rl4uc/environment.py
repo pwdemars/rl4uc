@@ -57,7 +57,7 @@ class Env(object):
         
         # Parameters for ARMA
         self.arma_sigma = np.mean(forecast)/100
-        self.arma_x = 0
+        self.forecast_error = 0
         self.arma_z = 0
         self.arma_alpha = 0.95
         self.arma_beta = 0.02
@@ -67,7 +67,7 @@ class Env(object):
                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
                                                self.dispatch_resolution)
         
-        # Generator info
+        # Generator info 
         self.max_output = self.gen_info['max_output'].to_numpy()
         self.min_output = self.gen_info['min_output'].to_numpy()
         self.status = self.gen_info['status'].to_numpy()
@@ -144,9 +144,9 @@ class Env(object):
         auto-regressive moving average. 
         """
         z = np.random.normal(0, self.arma_sigma)
-        error = self.arma_alpha*self.arma_x + z + self.arma_beta*self.arma_z
+        error = self.arma_alpha*self.forecast_error + z + self.arma_beta*self.arma_z
         self.arma_z = z
-        self.arma_x = error        
+        self.forecast_error = error        
         
         return error
     
@@ -192,7 +192,8 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'demand_real': self.demand_real}
+                      'demand_real': self.demand_real,
+                      'forecast_error': self.forecast_error}
         
         # Calculate fuel cost and dispatch for the demand realisation 
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
@@ -471,6 +472,8 @@ class Env(object):
             
         self.episode_timestep = 0
         self.forecast = None
+        self.forecast_error = 0
+        self.arma_z = 0
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
