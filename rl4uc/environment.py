@@ -57,7 +57,7 @@ class Env(object):
         
         # Parameters for ARMA
         self.arma_sigma = np.mean(forecast)/100
-        self.forecast_error = 0
+        self.forecast_error = 0.
         self.arma_z = 0
         self.arma_alpha = 0.95
         self.arma_beta = 0.02
@@ -493,7 +493,8 @@ class Env(object):
                       'status_capped': self.status_capped,
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
-                      'demand_forecast_norm': self.demand_forecast_norm}
+                      'demand_forecast_norm': self.demand_forecast_norm,
+                      'forecast_error': 0.}
         
         return self.state
 
