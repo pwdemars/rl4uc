@@ -36,7 +36,7 @@ class Env(object):
         
         self.gen_info = gen_info
         self.all_forecast = forecast
-        self.all_forecast_norm = forecast
+        self.all_forecast_norm = forecast_norm
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
@@ -147,7 +147,7 @@ class Env(object):
           - x (float): previous forecast error
           - z (float): previous random noise
         """
-        new_z = np.random.normal(0, self.arma_sigma)
+        z = np.random.normal(0, self.arma_sigma)
         error = self.arma_alpha*x + z + self.arma_beta*self.arma_z
         
         return error, z
@@ -190,7 +190,7 @@ class Env(object):
         
         # Cap and normalise status
         self.cap_and_normalise_status()
-        
+
         # Assign state
         self.demand_forecast, self.demand_forecast_norm = self.get_demand_forecast()     
         self.state = {'status': self.status,
