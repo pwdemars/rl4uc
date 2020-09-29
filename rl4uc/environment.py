@@ -57,7 +57,7 @@ class Env(object):
         
         # Parameters for ARMA
         self.arma_sigma = np.mean(forecast)/100
-        self.forecast_error = 0.
+        self.last_error = 0.
         self.arma_z = 0
         self.arma_alpha = 0.95
         self.arma_beta = 0.02
@@ -138,17 +138,19 @@ class Env(object):
                        self.min_demand,
                        self.max_demand)
     
-    def sample_error(self):
+    def sample_error(self, x, z):
         """
         Sample a realisation of demand forecast error using first order 
         auto-regressive moving average. 
+       
+        Args:
+          - x (float): previous forecast error
+          - z (float): previous random noise
         """
-        z = np.random.normal(0, self.arma_sigma)
-        error = self.arma_alpha*self.forecast_error + z + self.arma_beta*self.arma_z
-        self.arma_z = z
-        self.forecast_error = error        
+        new_z = np.random.normal(0, self.arma_sigma)
+        error = self.arma_alpha*x + z + self.arma_beta*self.arma_z
         
-        return error
+        return error, z
     
     def step(self, action):
         """
@@ -170,7 +172,10 @@ class Env(object):
         self.forecast_norm = self.all_forecast_norm[self.hour]
         
         # Sample demand realisation
-        self.demand_real = self.forecast + self.sample_error()
+        error, z = self.sample_error(self.last_error, self.arma_z)
+        self.last_error = error
+        self.arma_z = z 
+        self.demand_real = self.forecast + error
         self.demand_real = np.clip(self.demand_real, self.min_demand, self.max_demand)
         
         # Calculate start costs 
@@ -193,7 +198,7 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'forecast_error': self.forecast_error}
+                      'forecast_error': self.last_error/self.max_demand}
         
         # Calculate fuel cost and dispatch for the demand realisation 
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
@@ -234,6 +239,34 @@ class Env(object):
             reward = -operating_cost
 
         return reward
+    
+
+    def sample_reward_new(self, x, z):
+        """
+        Sample a new realisation of demand, with forecast errors following an 
+        ARMA model. 
+
+        Args:
+          - x (float): previous forecast error
+          - z (float): previous white noise
+        """
+        if self.mode=="train":
+            raise ValueError("sample reward is not yet available in training mode")
+        
+        error, z = self.sample_error(x, z)
+        demand_real = self.forecast + error
+        demand_real = np.clip(demand_real, self.min_demand, self.max_demand)     
+        
+        fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
+
+        diff = abs(demand_real - np.sum(disp))
+        ens_amount = diff if diff > self.dispatch_tolerance else 0
+        ens_cost = ens_amount*self.voll*self.dispatch_resolution
+        is_ens = ens_amount > 0
+        
+        operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
+
+        return -operating_cost, is_ens, error, z
     
     def sample_reward(self):
         """
@@ -472,7 +505,7 @@ class Env(object):
             
         self.episode_timestep = 0
         self.forecast = None
-        self.forecast_error = 0
+        self.last_error = 0
         self.arma_z = 0
         
         # Initalise grid status and constraints
