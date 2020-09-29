@@ -171,6 +171,7 @@ class Env(object):
         
         # Sample demand realisation
         self.demand_real = self.forecast + self.sample_error()
+        self.demand_real = np.clip(self.demand_real, self.min_demand, self.max_demand)
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
@@ -192,7 +193,6 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'demand_real': self.demand_real,
                       'forecast_error': self.forecast_error}
         
         # Calculate fuel cost and dispatch for the demand realisation 
