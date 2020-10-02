@@ -56,7 +56,7 @@ class Env(object):
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
         # Parameters for ARMA
-        self.arma_sigma = np.mean(forecast)/100
+        self.arma_sigma = 1*np.mean(forecast)/100
         self.last_error = 0.
         self.arma_z = 0
         self.arma_alpha = 0.95
@@ -210,6 +210,67 @@ class Env(object):
         self.ens = True if ens_amount > 0 else False
         
         reward = self.get_reward(self.demand_real)
+        self.reward = reward
+        
+        done = self.is_terminal()
+        
+        return self.state, reward, done
+
+    def step_deterministic(self, action):
+        """
+        Same as step(), except it follows the forecast exactly.
+        
+        The ordering of this function is important. The costs need to be calculated
+        AFTER the demand has rolled forward, but BEFORE the grid_state is updated
+        and update_gen_status is called (because it uses the grid status of the
+        period before the dispatch in order to calculate start costs.
+        """
+        
+        # Fix constrained generators (if necessary)
+        action = self.legalise_action(action)
+        
+        # Advance demand 
+        self.episode_timestep += 1
+        self.hour += 1
+        self.forecast = self.all_forecast[self.hour]
+        self.forecast_norm = self.all_forecast_norm[self.hour]
+        
+        # Sample demand realisation
+        self.demand_real = self.forecast
+        
+        # Calculate start costs 
+        self.start_cost = self.calculate_start_costs(action)
+        
+        # Update generator status
+        self.grid_state = action
+        self.update_gen_status(action)
+        
+        # Get available actions
+        self.determine_constraints()
+        
+        # Cap and normalise status
+        self.cap_and_normalise_status()
+
+        # Assign state
+        self.demand_forecast, self.demand_forecast_norm = self.get_demand_forecast()     
+        self.state = {'status': self.status,
+                      'status_capped': self.status_capped,
+                      'status_norm': self.status_norm,
+                      'demand_forecast': self.demand_forecast,
+                      'demand_forecast_norm': self.demand_forecast_norm,
+                      'forecast_error': self.last_error/self.max_demand}
+        
+        # Calculate fuel cost and dispatch for the demand realisation 
+        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
+        
+        # Calculating lost load costs and marking ENS
+        diff = abs(self.demand_real - np.sum(self.disp))
+        ens_amount = diff if diff > self.dispatch_tolerance else 0
+        self.ens_cost = ens_amount*self.voll*self.dispatch_resolution
+        self.ens = True if ens_amount > 0 else False
+        
+        reward = self.get_reward(self.demand_real)
+        self.reward = reward
         
         done = self.is_terminal()
         
@@ -507,6 +568,7 @@ class Env(object):
         self.forecast = None
         self.last_error = 0
         self.arma_z = 0
+        self.demand_real = self.all_forecast[self.hour]
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
