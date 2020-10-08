@@ -60,11 +60,11 @@ class Env(object):
         # self.arma_sigma = 1*np.mean(forecast)/100
         self.last_error = 0.
         self.arma_z = 0
-        self.arma_alpha = 0.95
-        self.arma_beta = 0.02
+        self.arma_alpha = 0.99
+        self.arma_beta = 0.1
         self.arma_sigma = self.calculate_arma_sigma(self.arma_alpha, self.arma_beta, 
                                                     sum(self.gen_info.max_output)/10, 
-                                                    1-0.0001)
+                                                    1-0.001)
         
         self.excess_capacity_penalty_factor = (self.num_gen * 
                                                kwargs.get('excess_capacity_penalty_factor', 
