@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd 
 import os
+from scipy.stats import norm
 
 from .dispatch import lambda_iteration, calculate_costs
 from .generate_demand import scale_demand
@@ -56,11 +57,14 @@ class Env(object):
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
         # Parameters for ARMA
-        self.arma_sigma = 1*np.mean(forecast)/100
+        # self.arma_sigma = 1*np.mean(forecast)/100
         self.last_error = 0.
         self.arma_z = 0
         self.arma_alpha = 0.95
         self.arma_beta = 0.02
+        self.arma_sigma = self.calculate_arma_sigma(self.arma_alpha, self.arma_beta, 
+                                                    sum(self.gen_info.max_output)/10, 
+                                                    1-0.0001)
         
         self.excess_capacity_penalty_factor = (self.num_gen * 
                                                kwargs.get('excess_capacity_penalty_factor', 
@@ -128,6 +132,31 @@ class Env(object):
         pl = (a*(outputs**2) + b*outputs + c)/outputs
         return pl
     
+    def calculate_arma_sigma(self, alpha, beta, x, p):
+        """
+        Calculate the standard deviation for the white noise used in the ARMA process.
+    
+        Parameters
+        ----------
+        alpha : float
+            Coefficient for AR term of ARMA process
+        beta : float
+            Coefficient for MA term of ARMA process
+        x : float
+            Value for quantile at p (e.g. reserve constraint)
+        p : float (0<p<1)
+            Quantile for value x (e.g. probability of error exceeding x)
+    
+        Returns
+        -------
+        float
+            Standard deviation (sigma) of ARMA process with specified parameters.
+    
+        """
+        num = np.square(x/norm.ppf(p))
+        denom = 1 + np.square(alpha + beta)/(1-np.square(alpha))
+        return np.sqrt(num/denom)
+    
     def sample_demand(self):
         """ 
         Sample a realisation of demand. 
@@ -138,7 +167,7 @@ class Env(object):
                        self.min_demand,
                        self.max_demand)
     
-    def sample_error(self, x, z):
+    def sample_error(self, x_last, z_last):
         """
         Sample a realisation of demand forecast error using first order 
         auto-regressive moving average. 
@@ -148,7 +177,7 @@ class Env(object):
           - z (float): previous random noise
         """
         z = np.random.normal(0, self.arma_sigma)
-        error = self.arma_alpha*x + z + self.arma_beta*self.arma_z
+        error = self.arma_alpha*x_last + z + self.arma_beta*z_last
         
         return error, z
     
@@ -161,7 +190,6 @@ class Env(object):
         and update_gen_status is called (because it uses the grid status of the
         period before the dispatch in order to calculate start costs.
         """
-        
         # Fix constrained generators (if necessary)
         action = self.legalise_action(action)
         
@@ -650,7 +678,7 @@ def make_env(mode="train", forecast=None, reference_forecast=None, **params):
         forecast_norm = (forecast_scaled - np.min(forecast_scaled)) / np.ptp(forecast_scaled)
     else:
         raise ValueError("Can't pass `reference_forecast` on its own. Must provide `forecast`")
-        
+
     env = Env(gen_info, forecast_scaled, forecast_norm, mode, **params)
     env.reset()
             
