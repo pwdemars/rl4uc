@@ -620,6 +620,39 @@ class Env(object):
                       'forecast_error': 0.}
         
         return self.state
+    
+def create_gen_info(num_gen, dispatch_freq_mins):
+    """
+    Create a gen_info data frame for number of generators and dispatch frequency. 
+    Created by copying generators kazarlis 10 gen problem. 
+    
+    The 10 generator problem is for 30 minute resolution data, so min_down_time
+    status, and other time-related vars need to be scaled accordingly.
+    
+    """
+    MIN_GENS = 5
+    if num_gen < 5: 
+        raise ValueError("num_gen should be at least {}".format(MIN_GENS))
+    
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    
+    # Repeat generators
+    gen10 = pd.read_csv(os.path.join(script_dir,
+                                     'data/kazarlis_units_10.csv'))
+    upper_limit = int(np.floor(num_gen/10) + 1)
+    gen_info = pd.concat([gen10]*upper_limit)[:num_gen]
+    gen_info = gen_info.sort_index()
+    gen_info.reset_index()
+    
+    # Scale time-related variables
+    gen_info.t_min_up = gen_info.t_min_up * (60/dispatch_freq_mins)
+    gen_info.t_min_down = gen_info.t_min_down *  (60/dispatch_freq_mins)
+    gen_info.status = gen_info.status * (60/dispatch_freq_mins)
+    gen_info = gen_info.astype({'t_min_down': 'int64',
+                                't_min_up': 'int64',
+                                'status': 'int64'})    
+    
+    return gen_info
 
 def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     """
@@ -628,29 +661,23 @@ def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     The params file must include the number of generators 
     """
     
-    valid_gens = [5, 10, 20]
-    valid_dispatch_freq_mins = [5, 15, 30]
-    
-    if params.get('num_gen', DEFAULT_NUM_GEN) not in valid_gens:
-        raise ValueError("Invalid number of generators: must be one of: {}".format(valid_gens))
-        
-    if params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) not in valid_dispatch_freq_mins:
-        raise ValueError("Invalid dispatch frequency: must be one of: {} minutes".format(valid_dispatch_freq_mins))
-        
     script_dir = os.path.dirname(os.path.realpath(__file__))
     
-    # Get original kazarlis unit data (at 1 hour resolution)
-    gen_info_fn = 'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '.csv'
-    gen_info = pd.read_csv(os.path.join(script_dir, gen_info_fn))
+    gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
+                              params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+   
+    # # Get original kazarlis unit data (at 1 hour resolution)
+    # gen_info_fn = 'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '.csv'
+    # gen_info = pd.read_csv(os.path.join(script_dir, gen_info_fn))
     
-    # Scale constraint times and initial status (in periods) with dispatch frequency
-    # E.g. if dispatch frequency is 30 mins, multiply by 2. 
-    gen_info.t_min_up = gen_info.t_min_up * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    gen_info.t_min_down = gen_info.t_min_down * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    gen_info.status = gen_info.status * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    gen_info = gen_info.astype({'t_min_down': 'int64',
-                                't_min_up': 'int64',
-                                'status': 'int64'})
+    # # Scale constraint times and initial status (in periods) with dispatch frequency
+    # # E.g. if dispatch frequency is 30 mins, multiply by 2. 
+    # gen_info.t_min_up = gen_info.t_min_up * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    # gen_info.t_min_down = gen_info.t_min_down * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    # gen_info.status = gen_info.status * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    # gen_info = gen_info.astype({'t_min_down': 'int64',
+    #                             't_min_up': 'int64',
+    #                             'status': 'int64'})
     
     if forecast is None:
         # Default forecast is National Grid 5 years, at 30 mins resolution
