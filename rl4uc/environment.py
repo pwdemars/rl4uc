@@ -32,9 +32,8 @@ class Env(object):
         modes = ['test', 'train']
         if mode not in modes:
             raise ValueError("Invalid mode: must be test or train")
-        else:
-            self.mode = mode # Test or train. Determines the reward function and is_terminal()
         
+        self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
         self.all_forecast = forecast
         self.all_forecast_norm = forecast_norm
@@ -432,8 +431,7 @@ class Env(object):
             econ = lambda_iteration(demand, lambda_lo,
                                              lambda_hi, on_a, on_b,
                                              on_min, on_max, self.dispatch_tolerance)
-        for (i, e) in zip(idx, econ):
-            disp[i] = e        
+        disp[idx] = econ
             
         return disp
         
@@ -666,19 +664,6 @@ def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
                               params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
    
-    # # Get original kazarlis unit data (at 1 hour resolution)
-    # gen_info_fn = 'data/kazarlis_units_' + str(params.get('num_gen', DEFAULT_NUM_GEN)) + '.csv'
-    # gen_info = pd.read_csv(os.path.join(script_dir, gen_info_fn))
-    
-    # # Scale constraint times and initial status (in periods) with dispatch frequency
-    # # E.g. if dispatch frequency is 30 mins, multiply by 2. 
-    # gen_info.t_min_up = gen_info.t_min_up * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    # gen_info.t_min_down = gen_info.t_min_down * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    # gen_info.status = gen_info.status * (60/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    # gen_info = gen_info.astype({'t_min_down': 'int64',
-    #                             't_min_up': 'int64',
-    #                             'status': 'int64'})
-    
     if forecast is None:
         # Default forecast is National Grid 5 years, at 30 mins resolution
         forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
