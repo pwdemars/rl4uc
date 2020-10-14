@@ -102,7 +102,8 @@ def scale_demand(reference_demand, target_demand, gen_info):
     D_min = np.max(gen_info.min_output) * 10/9 # 10% footroom
     D_max = np.sum(gen_info.max_output) * 10/11 # 10% headroom
     
-    new_demand = ((target_demand - np.min(reference_demand))/np.ptp(reference_demand))*(D_max - D_min) + D_min
+    new_demand = (target_demand - np.min(reference_demand))/np.ptp(reference_demand)
+    new_demand = new_demand * (D_max-D_min) + D_min
     
     return new_demand
     

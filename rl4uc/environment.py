@@ -25,7 +25,7 @@ class Env(object):
     forecast, the generator information. Methods include calculating costs of
     actions; advancing grid in response to actions. 
     
-    TODO: dispatchable wind
+    TODO: wind
     """
     def __init__(self, gen_info, forecast, forecast_norm, mode='train', **kwargs):
         
@@ -180,7 +180,7 @@ class Env(object):
         
         return error, z
     
-    def step(self, action):
+    def step(self, action, deterministic=False):
         """
         Transition a timestep forward following an action.
         
@@ -199,9 +199,12 @@ class Env(object):
         self.forecast_norm = self.all_forecast_norm[self.hour]
         
         # Sample demand realisation
-        error, z = self.sample_error(self.last_error, self.arma_z)
-        self.last_error = error
-        self.arma_z = z 
+        if deterministic is False:
+            error, z = self.sample_error(self.last_error, self.arma_z)
+            self.last_error = error
+            self.arma_z = z 
+        else: # Environment is deterministic (for day-ahead UC planning)
+            error = 0 
         self.demand_real = self.forecast + error
         self.demand_real = np.clip(self.demand_real, self.min_demand, self.max_demand)
         
@@ -243,66 +246,6 @@ class Env(object):
         
         return self.state, reward, done
 
-    def step_deterministic(self, action):
-        """
-        Same as step(), except it follows the forecast exactly.
-        
-        The ordering of this function is important. The costs need to be calculated
-        AFTER the demand has rolled forward, but BEFORE the grid_state is updated
-        and update_gen_status is called (because it uses the grid status of the
-        period before the dispatch in order to calculate start costs.
-        """
-        
-        # Fix constrained generators (if necessary)
-        action = self.legalise_action(action)
-        
-        # Advance demand 
-        self.episode_timestep += 1
-        self.hour += 1
-        self.forecast = self.all_forecast[self.hour]
-        self.forecast_norm = self.all_forecast_norm[self.hour]
-        
-        # Sample demand realisation
-        self.demand_real = self.forecast
-        
-        # Calculate start costs 
-        self.start_cost = self.calculate_start_costs(action)
-        
-        # Update generator status
-        self.grid_state = action
-        self.update_gen_status(action)
-        
-        # Get available actions
-        self.determine_constraints()
-        
-        # Cap and normalise status
-        self.cap_and_normalise_status()
-
-        # Assign state
-        self.demand_forecast, self.demand_forecast_norm = self.get_demand_forecast()     
-        self.state = {'status': self.status,
-                      'status_capped': self.status_capped,
-                      'status_norm': self.status_norm,
-                      'demand_forecast': self.demand_forecast,
-                      'demand_forecast_norm': self.demand_forecast_norm,
-                      'forecast_error': self.last_error/self.max_demand}
-        
-        # Calculate fuel cost and dispatch for the demand realisation 
-        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
-        
-        # Calculating lost load costs and marking ENS
-        diff = abs(self.demand_real - np.sum(self.disp))
-        ens_amount = diff if diff > self.dispatch_tolerance else 0
-        self.ens_cost = ens_amount*self.voll*self.dispatch_resolution
-        self.ens = True if ens_amount > 0 else False
-        
-        reward = self.get_reward(self.demand_real)
-        self.reward = reward
-        
-        done = self.is_terminal()
-        
-        return self.state, reward, done
-    
     def get_reward(self, demand_real):
         """
         Calculate the reward.
@@ -673,7 +616,7 @@ def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     script_dir = os.path.dirname(os.path.realpath(__file__))
     
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
-                              params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+                               params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
    
     if forecast is None:
         # Default forecast is National Grid 5 years, at 30 mins resolution
