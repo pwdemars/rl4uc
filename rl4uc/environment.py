@@ -28,15 +28,14 @@ class Env(object):
     TODO: wind
     """
     def __init__(self, gen_info, forecast, forecast_norm, mode='train', **kwargs):
-        
-        modes = ['test', 'train']
-        if mode not in modes:
+        if mode not in ['test', 'train']:
             raise ValueError("Invalid mode: must be test or train")
         
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
         self.all_forecast = forecast
         self.all_forecast_norm = forecast_norm
+        
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
@@ -194,9 +193,8 @@ class Env(object):
         
         # Advance demand 
         self.episode_timestep += 1
-        self.hour += 1
-        self.forecast = self.all_forecast[self.hour]
-        self.forecast_norm = self.all_forecast_norm[self.hour]
+        self.forecast = self.episode_forecast[self.episode_timestep]
+        self.forecast_norm = self.episode_forecast_norm[self.episode_timestep]
         
         # Sample demand realisation
         if deterministic is False:
@@ -270,7 +268,6 @@ class Env(object):
             reward = -operating_cost
 
         return reward
-    
 
     def sample_reward_new(self, x, z):
         """
@@ -328,10 +325,8 @@ class Env(object):
         Return the absolute and normalised demand forecasts for the next 
         forecast_length periods. Used to update the state attribute. 
         """
-        a = self.hour+1
-        z = self.end_hour+1
-        demand_forecast = self.all_forecast[a:z]
-        demand_forecast_norm = self.all_forecast_norm[a:z]
+        demand_forecast = self.episode_forecast[self.episode_timestep+1:]
+        demand_forecast_norm = self.episode_forecast_norm[self.episode_timestep+1:]
         return demand_forecast, demand_forecast_norm
         
     def update_gen_status(self, action):
@@ -499,7 +494,7 @@ class Env(object):
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
-            demand = self.all_forecast[self.hour+t+1] # Nominal demand for t+1th period ahead
+            demand = self.episode_forecast[self.episode_timestep+t+1] # Nominal demand for t+1th period ahead
             future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
             available_generators = (-future_status >= self.t_min_down) | self.grid_state # Determines the availability of generators as binary array
@@ -521,9 +516,9 @@ class Env(object):
         When testing, terminal states only occur at the end of the episode. 
         """
         if self.mode == "train":
-            return (self.episode_timestep == self.episode_length) or self.ens
+            return (self.episode_timestep == (self.episode_length-1)) or self.ens
         else: 
-            return self.episode_timestep == self.episode_length
+            return self.episode_timestep == (self.episode_length-1)
     
     def reset(self):
         """
@@ -537,18 +532,18 @@ class Env(object):
         
         # Initialise timestep and choose random hour to begin episode 
         if self.mode == 'train':
-            self.start_hour = self.hour = np.random.choice(len(self.all_forecast) - 2*self.episode_length) # leave some buffer
+            self.start_hour = np.random.choice(len(self.all_forecast) - 2*self.episode_length) # leave some buffer
+            self.episode_forecast = self.all_forecast[self.start_hour:self.start_hour+self.episode_length]
+            self.episode_forecast_norm = self.all_forecast_norm[self.start_hour:self.start_hour+self.episode_length]
         else:
-            self.start_hour = self.hour = -1 # Set to 1 period before begin of demand profile.
+            self.episode_forecast = self.all_forecast
+            self.episode_forecast_norm = self.all_forecast_norm
         
-        # Set end peiod
-        self.end_hour = self.start_hour + self.episode_length
-            
-        self.episode_timestep = 0
+        self.episode_timestep = -1
         self.forecast = None
         self.last_error = 0
         self.arma_z = 0
-        self.demand_real = self.all_forecast[self.hour]
+        self.demand_real = None
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
