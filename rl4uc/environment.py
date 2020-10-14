@@ -192,15 +192,13 @@ class Env(object):
         demand_real = np.clip(demand_real, self.min_demand, self.max_demand)    
         
         return demand_real
-        
-        
-    
+
     def step(self, action, deterministic=False):
         """
         Transition a timestep forward following an action.
         
         The ordering of this function is important. The costs need to be calculated
-        AFTER the demand has rolled forward, but BEFORE the grid_state is updated
+        AFTER the demand has rolled forward, but BEFORE the commitment is updated
         and update_gen_status is called (because it uses the grid status of the
         period before the dispatch in order to calculate start costs.
         """
@@ -219,7 +217,7 @@ class Env(object):
         self.start_cost = self.calculate_start_costs(action)
         
         # Update generator status
-        self.grid_state = action
+        self.commitment = action
         self.update_gen_status(action)
         
         # Get available actions
@@ -269,7 +267,7 @@ class Env(object):
         
         if self.mode == 'train':
             # Spare capacity penalty:
-            reserve_margin = np.dot(self.grid_state, self.max_output)/self.forecast - 1
+            reserve_margin = np.dot(self.commitment, self.max_output)/self.forecast - 1
             excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
 
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
@@ -398,11 +396,11 @@ class Env(object):
         Calculate start costs incurred when stepping self with action.
         """
         # Start costs
-        idx = [list(map(list, zip(action, self.grid_state)))[i] == [1,0] for i in range(self.num_gen)]
+        idx = [list(map(list, zip(action, self.commitment)))[i] == [1,0] for i in range(self.num_gen)]
         idx = np.where(idx)[0]
         start_cost = 0
         for i in idx:
-            if abs(self.grid_state[i]) <= self.cold_hrs[i]: #####
+            if abs(self.commitment[i]) <= self.cold_hrs[i]: #####
                 start_cost += self.hot_cost[i]
             else:
                 start_cost += self.cold_cost[i]
@@ -458,10 +456,10 @@ class Env(object):
             - dispatch (array): power output for each generator
         """
         # Get economic dispatcb
-        disp = self.economic_dispatch(self.grid_state, demand, 0, 100)
+        disp = self.economic_dispatch(self.commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = self.calculate_fuel_costs(disp, self.grid_state)
+        fuel_cost = self.calculate_fuel_costs(disp, self.commitment)
         
         return fuel_cost, disp
         
@@ -491,22 +489,22 @@ class Env(object):
         """
         # Infeasible if demand can't be met in current period (except in initial period)
         if self.episode_timestep > 0:
-            if np.dot(self.grid_state, self.max_output) < self.forecast:
+            if np.dot(self.commitment, self.max_output) < self.forecast:
                 return False
         
         # If all generators are on, demand can definitely be met (upwards)
-        if np.all(self.grid_state):
+        if np.all(self.commitment):
             return True
         
         # Determine how many timesteps ahead we need to consider
-        horizon = max(0, np.max((self.t_min_down + self.status)[np.where(self.grid_state == 0)])) # Get the max number of time steps required to determine feasibility
+        horizon = max(0, np.max((self.t_min_down + self.status)[np.where(self.commitment == 0)])) # Get the max number of time steps required to determine feasibility
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
             demand = self.episode_forecast[self.episode_timestep+t+1] # Nominal demand for t+1th period ahead
             future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
-            available_generators = (-future_status >= self.t_min_down) | self.grid_state # Determines the availability of generators as binary array
+            available_generators = (-future_status >= self.t_min_down) | self.commitment # Determines the availability of generators as binary array
             available_cap = np.dot(available_generators, self.max_output)
             
             if available_cap < demand:
@@ -561,7 +559,7 @@ class Env(object):
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
-        self.grid_state = np.where(self.status > 0, 1, 0)
+        self.commitment = np.where(self.status > 0, 1, 0)
         self.determine_constraints()
         
         # Cap and normalise
