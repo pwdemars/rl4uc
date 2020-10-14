@@ -32,7 +32,7 @@ action = np.array([1,1,0,0,0]) # Turn on generators 0 & 1, turns all others off
 # Take the action, observe the reward.
 observation, reward, done = env.step(action)
 
-print("Dispatch: {}".format(env.dispatch))
+print("Dispatch: {}".format(env.disp))
 print("Finished? {}".format(done))
 print("Reward: {:.2f}".format(reward))
 ```
