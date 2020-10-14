@@ -66,3 +66,4 @@ def calculate_costs(outputs, a, b, c, dispatch_resolution):
             cost_unit = dispatch_resolution*(a[i]*(outputs[i]**2) + b[i]*outputs[i] + c[i])
             cost_list.append(cost_unit)
     return cost_list
+

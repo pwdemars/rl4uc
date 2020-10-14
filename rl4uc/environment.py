@@ -5,7 +5,7 @@ import pandas as pd
 import os
 from scipy.stats import norm
 
-from .dispatch import lambda_iteration, calculate_costs
+from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
 
 DEFAULT_VOLL=1000
@@ -434,6 +434,17 @@ class Env(object):
         disp[idx] = econ
             
         return disp
+
+    def calculate_fuel_costs(self, output, commitment):
+        """ 
+        Calculate total fuel costs for each generator, returning the sum.
+
+        The fuel costs are quadratic: c = ax^2 + bx + c
+        """
+        costs = np.multiply(output, np.square(self.a)) + np.dot(output, self.b) + self.c
+        costs = np.dot(commitment, costs) # Don't count fuel costs for offline generators
+        costs = costs * self.dispatch_resolution # Convert to MWh by multiplying by dispatch resolution in hrs
+        return costs
         
     def calculate_start_costs(self, action):
         """
@@ -503,7 +514,7 @@ class Env(object):
         disp = self.economic_dispatch(self.grid_state, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = sum(calculate_costs(disp, self.a, self.b, self.c, self.dispatch_resolution))
+        fuel_cost = self.calculate_fuel_costs(disp, self.grid_state)
         
         return fuel_cost, disp
         
