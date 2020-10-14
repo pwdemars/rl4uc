@@ -19,6 +19,38 @@ DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 2e3
 
+class ARMAProcess(object):
+    """
+    First order ARMA process. 
+    """
+    def __init__(self, alpha, beta, name, sigma=0):
+        self.alpha=alpha
+        self.beta=beta
+        self.name=name
+        self.sigma=sigma
+        self.x=0. # Last sampled error
+        self.z=0. # Last sampled white noise 
+    
+    def sample_error(self):
+        z = np.random.normal(0, self.sigma)
+        x = self.alpha*self.x + self.beta*self.z + z
+        self.z = z 
+        self.x = x
+        return x 
+    
+    def set_sigma(self, x, p):
+        """
+        Calculate the standard deviation for the white noise used in the ARMA process
+        based on a quantile defined by x and p: P(X<x)=p
+        
+        For instance, this might be useful for determining relaibility criteria:
+        e.g. probability of demand exceeding x should be no greater than p. 
+        """
+        num = np.square(x/norm.ppf(p))
+        denom = 1 + np.square(self.alpha + self.beta)/(1-np.square(self.alpha))
+        self.sigma=np.sqrt(num/denom)
+        
+
 class Env(object):
     """
     Environment class holding information about the grid state, the demand 
@@ -57,16 +89,14 @@ class Env(object):
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
-        # Parameters for ARMA
-        # self.arma_sigma = 1*np.mean(forecast)/100
-        self.last_error = 0. # 
-        self.last_z = 0. 
-        self.arma_alpha = 0.99
-        self.arma_beta = 0.1
-        self.arma_sigma = self.calculate_arma_sigma(self.arma_alpha, self.arma_beta, 
-                                                    sum(self.gen_info.max_output)/10, 
-                                                    1-0.001)
+        # Parameters for ARMA demand
+        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
+        self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
         
+        # Parameters for ARMA wind
+        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
+        
+        # Penalty factor for committing excess capacity, usedi n training reward function 
         self.excess_capacity_penalty_factor = (self.num_gen * 
                                                kwargs.get('excess_capacity_penalty_factor', 
                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
@@ -133,65 +163,29 @@ class Env(object):
         pl = (a*(outputs**2) + b*outputs + c)/outputs
         return pl
     
-    def calculate_arma_sigma(self, alpha, beta, x, p):
-        """
-        Calculate the standard deviation for the white noise used in the ARMA process.
-        
-        Parameters
-        ----------
-        alpha : float
-            Coefficient for AR term of ARMA process
-        beta : float
-            Coefficient for MA term of ARMA process
-        x : float
-            Value for quantile at p (e.g. reserve constraint)
-        p : float (0<p<1)
-            Quantile for value x (e.g. probability of error exceeding x)
-    
-        Returns
-        -------
-        float
-            Standard deviation (sigma) of ARMA process with specified parameters.
-    
-        """
-        num = np.square(x/norm.ppf(p))
-        denom = 1 + np.square(alpha + beta)/(1-np.square(alpha))
-        return np.sqrt(num/denom)
-    
-    def sample_demand(self):
-        """ 
-        Sample a realisation of demand. 
-        
-        Change the demand distribution by editing this function. 
-        """
-        return np.clip(self.forecast * np.random.normal(1, self.demand_uncertainty),
-                       self.min_demand,
-                       self.max_demand)
-    
-    def sample_error(self):
-        """
-        Sample a realisation of demand forecast error using first order 
-        auto-regressive moving average. 
-        
-        TODO: second order? 
-        """
-        z = np.random.normal(0, self.arma_sigma)
-        error = self.arma_alpha*self.last_error + z + self.arma_beta*self.last_z
-        
-        return error, z
-    
     def get_net_demand(self, deterministic):
         """
         Sample demand and wind realisations to get net demand forecast. 
         """
+        # Determine demand realisation 
         if deterministic is False:
-            self.last_error, self.last_z = self.sample_error()
-            demand_real = self.forecast + self.last_error
+            error = self.arma_demand.sample_error()
         else:
-            demand_real = self.forecast
-        demand_real = np.clip(demand_real, self.min_demand, self.max_demand)    
+            error = 0 
+        demand_real = self.forecast + error
         
-        return demand_real
+        # Wind realisation
+        if deterministic is False:
+            error = self.arma_wind.sample_error()
+        else:
+            error = 0 
+        wind_real = self.wind_forecast + error
+        
+        # Net demand is demand - wind 
+        net_demand = demand_real - wind_real
+        net_demand = np.clip(net_demand, self.min_demand, self.max_demand)    
+        
+        return net_demand
 
     def step(self, action, deterministic=False):
         """
@@ -209,9 +203,11 @@ class Env(object):
         self.episode_timestep += 1
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.forecast_norm = self.episode_forecast_norm[self.episode_timestep]
+        self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
+        self.wind_forecast_norm = self.episode_wind_forecast_norm[self.episode_timestep]
         
         # Sample demand realisation
-        self.demand_real = self.get_net_demand(deterministic)
+        self.net_demand = self.get_net_demand(deterministic)
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
@@ -233,25 +229,25 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'forecast_error': self.last_error/self.max_demand}
+                      'demand_error': self.arma_demand.x/self.max_demand}
         
         # Calculate fuel cost and dispatch for the demand realisation 
-        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.demand_real)
+        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
         
         # Calculating lost load costs and marking ENS
-        diff = abs(self.demand_real - np.sum(self.disp))
+        diff = abs(self.net_demand - np.sum(self.disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         self.ens_cost = ens_amount*self.voll*self.dispatch_resolution
         self.ens = True if ens_amount > 0 else False
         
-        reward = self.get_reward(self.demand_real)
+        reward = self.get_reward(self.net_demand)
         self.reward = reward
         
         done = self.is_terminal()
         
         return self.state, reward, done
 
-    def get_reward(self, demand_real):
+    def get_reward(self, net_demand):
         """
         Calculate the reward.
         
@@ -555,7 +551,7 @@ class Env(object):
         self.forecast = None
         self.last_error = 0
         self.last_z = 0
-        self.demand_real = None
+        self.net_demand = None
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
@@ -576,7 +572,7 @@ class Env(object):
                       'status_norm': self.status_norm,
                       'demand_forecast': self.demand_forecast,
                       'demand_forecast_norm': self.demand_forecast_norm,
-                      'forecast_error': 0.}
+                      'demand_error': 0.}
         
         return self.state
     
