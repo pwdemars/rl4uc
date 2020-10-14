@@ -36,6 +36,9 @@ class Env(object):
         self.all_forecast = forecast
         self.all_forecast_norm = forecast_norm
         
+        self.all_wind = np.random.uniform(0,20,1000)
+        self.all_wind_norm = np.random.uniform(0,1,1000)
+        
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
@@ -56,8 +59,8 @@ class Env(object):
         
         # Parameters for ARMA
         # self.arma_sigma = 1*np.mean(forecast)/100
-        self.last_error = 0.
-        self.arma_z = 0
+        self.last_error = 0. # 
+        self.last_z = 0. 
         self.arma_alpha = 0.99
         self.arma_beta = 0.1
         self.arma_sigma = self.calculate_arma_sigma(self.arma_alpha, self.arma_beta, 
@@ -133,7 +136,7 @@ class Env(object):
     def calculate_arma_sigma(self, alpha, beta, x, p):
         """
         Calculate the standard deviation for the white noise used in the ARMA process.
-    
+        
         Parameters
         ----------
         alpha : float
@@ -165,19 +168,32 @@ class Env(object):
                        self.min_demand,
                        self.max_demand)
     
-    def sample_error(self, x_last, z_last):
+    def sample_error(self):
         """
         Sample a realisation of demand forecast error using first order 
         auto-regressive moving average. 
-       
-        Args:
-          - x (float): previous forecast error
-          - z (float): previous random noise
+        
+        TODO: second order? 
         """
         z = np.random.normal(0, self.arma_sigma)
-        error = self.arma_alpha*x_last + z + self.arma_beta*z_last
+        error = self.arma_alpha*self.last_error + z + self.arma_beta*self.last_z
         
         return error, z
+    
+    def get_net_demand(self, deterministic):
+        """
+        Sample demand and wind realisations to get net demand forecast. 
+        """
+        if deterministic is False:
+            self.last_error, self.last_z = self.sample_error()
+            demand_real = self.forecast + self.last_error
+        else:
+            demand_real = self.forecast
+        demand_real = np.clip(demand_real, self.min_demand, self.max_demand)    
+        
+        return demand_real
+        
+        
     
     def step(self, action, deterministic=False):
         """
@@ -197,14 +213,7 @@ class Env(object):
         self.forecast_norm = self.episode_forecast_norm[self.episode_timestep]
         
         # Sample demand realisation
-        if deterministic is False:
-            error, z = self.sample_error(self.last_error, self.arma_z)
-            self.last_error = error
-            self.arma_z = z 
-        else: # Environment is deterministic (for day-ahead UC planning)
-            error = 0 
-        self.demand_real = self.forecast + error
-        self.demand_real = np.clip(self.demand_real, self.min_demand, self.max_demand)
+        self.demand_real = self.get_net_demand(deterministic)
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
@@ -529,20 +538,25 @@ class Env(object):
         - Reset generator statuses
         - Determine constraints
         """
-        
-        # Initialise timestep and choose random hour to begin episode 
         if self.mode == 'train':
-            self.start_hour = np.random.choice(len(self.all_forecast) - 2*self.episode_length) # leave some buffer
-            self.episode_forecast = self.all_forecast[self.start_hour:self.start_hour+self.episode_length]
-            self.episode_forecast_norm = self.all_forecast_norm[self.start_hour:self.start_hour+self.episode_length]
+            # Initialise timestep and choose random hour to begin episode 
+            x = np.random.choice(self.all_forecast.size - 2*self.episode_length) # leave some buffer
+            self.episode_forecast = self.all_forecast[x:x+self.episode_length]
+            self.episode_forecast_norm = self.all_forecast_norm[x:x+self.episode_length]
+            
+            x = np.random.choice(self.all_wind.size-2*self.episode_length)
+            self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
+            self.episode_wind_forecast_norm = self.all_wind_norm[x:x+self.episode_length]
+            
         else:
             self.episode_forecast = self.all_forecast
             self.episode_forecast_norm = self.all_forecast_norm
         
+        # Resetting episode variables
         self.episode_timestep = -1
         self.forecast = None
         self.last_error = 0
-        self.arma_z = 0
+        self.last_z = 0
         self.demand_real = None
         
         # Initalise grid status and constraints
