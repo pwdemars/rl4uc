@@ -81,8 +81,7 @@ class Env(object):
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
-            # 1 less than length of demand since at hour 0 demand is 
-            self.episode_length = len(forecast)
+            self.episode_length = len(demand_forecast)
         else:
             self.episode_length = kwargs.get('episode_length', DEFAULT_EPISODE_LENGTH)
             
@@ -132,7 +131,6 @@ class Env(object):
         self.heat_rates = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
         self.gen_info['heat_rates'] = self.heat_rates
         
-        self.state = None
         self.forecast = None
         self.forecast_norm = None
         self.start_cost = 0
@@ -230,15 +228,7 @@ class Env(object):
 
         # Assign state
         demand_forecast, demand_forecast_norm = self.get_demand_forecast()  
-        self.state = {'status': self.status,
-                      'status_capped': self.status_capped,
-                      'status_norm': self.status_norm,
-                      'demand_forecast': demand_forecast,
-                      'demand_forecast_norm': demand_forecast_norm,
-                      'demand_error': self.arma_demand.x/self.max_demand,
-                      'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                      'wind_forecast_norm': self.episode_wind_forecast_norm[self.episode_timestep+1:],
-                      'wind_error': self.arma_wind.x/self.max_demand}
+        state = self.get_state()
     
         # Calculate fuel cost and dispatch for the demand realisation 
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
@@ -250,11 +240,25 @@ class Env(object):
         self.ens = True if ens_amount > 0 else False
         
         reward = self.get_reward(self.net_demand)
-        self.reward = reward
         
         done = self.is_terminal()
         
-        return self.state, reward, done
+        return state, reward, done
+    
+    def get_state(self):
+        """
+        Get the state dictionary. 
+        """
+        state = {'status': self.status,
+                 'status_capped': self.status_capped,
+                 'status_norm': self.status_norm,
+                 'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
+                 'demand_forecast_norm': self.episode_forecast_norm[self.episode_timestep+1:],
+                 'demand_error': self.arma_demand.x/self.max_demand,
+                 'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
+                 'wind_forecast_norm': self.episode_wind_forecast_norm[self.episode_timestep+1:],
+                 'wind_error': self.arma_wind.x/self.max_demand}
+        return state
 
     def get_reward(self, net_demand):
         """
@@ -576,17 +580,9 @@ class Env(object):
 
         # Assign state
         demand_forecast, demand_forecast_norm = self.get_demand_forecast() 
-        self.state = {'status': self.status,
-                      'status_capped': self.status_capped,
-                      'status_norm': self.status_norm,
-                      'demand_forecast': demand_forecast,
-                      'demand_forecast_norm': demand_forecast_norm,
-                      'demand_error': 0.,
-                      'wind_forecast': self.episode_wind_forecast,
-                      'wind_forecast_norm': self.episode_wind_forecast_norm,
-                      'wind_error': 0.}
+        state = self.get_state()
         
-        return self.state
+        return state
     
 def create_gen_info(num_gen, dispatch_freq_mins):
     """
