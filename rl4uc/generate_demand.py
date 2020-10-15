@@ -106,4 +106,5 @@ def scale_demand(reference_demand, target_demand, gen_info):
     new_demand = new_demand * (D_max-D_min) + D_min
     
     return new_demand
+
     

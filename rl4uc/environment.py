@@ -59,17 +59,18 @@ class Env(object):
     
     TODO: wind
     """
-    def __init__(self, gen_info, forecast, forecast_norm, mode='train', **kwargs):
+    def __init__(self, gen_info, demand_forecast, demand_forecast_norm, wind_forecast,
+                 wind_forecast_norm, mode='train', **kwargs):
         if mode not in ['test', 'train']:
             raise ValueError("Invalid mode: must be test or train")
         
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
-        self.all_forecast = forecast
-        self.all_forecast_norm = forecast_norm
+        self.all_forecast = demand_forecast
+        self.all_forecast_norm = demand_forecast_norm
         
-        self.all_wind = np.random.uniform(0,20,1000)
-        self.all_wind_norm = np.random.uniform(0,1,1000)
+        self.all_wind = wind_forecast
+        self.all_wind_norm = wind_forecast_norm
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
@@ -173,6 +174,7 @@ class Env(object):
         else:
             error = 0 
         demand_real = self.forecast + error
+        demand_real = max(0, demand_real)
         
         # Wind realisation
         if deterministic is False:
@@ -180,6 +182,7 @@ class Env(object):
         else:
             error = 0 
         wind_real = self.wind_forecast + error
+        wind_real = max(0, wind_real)
         
         # Net demand is demand - wind 
         net_demand = demand_real - wind_real
@@ -223,14 +226,17 @@ class Env(object):
         self.cap_and_normalise_status()
 
         # Assign state
-        self.demand_forecast, self.demand_forecast_norm = self.get_demand_forecast()     
+        demand_forecast, demand_forecast_norm = self.get_demand_forecast()  
         self.state = {'status': self.status,
                       'status_capped': self.status_capped,
                       'status_norm': self.status_norm,
-                      'demand_forecast': self.demand_forecast,
-                      'demand_forecast_norm': self.demand_forecast_norm,
-                      'demand_error': self.arma_demand.x/self.max_demand}
-        
+                      'demand_forecast': demand_forecast,
+                      'demand_forecast_norm': demand_forecast_norm,
+                      'demand_error': self.arma_demand.x/self.max_demand,
+                      'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
+                      'wind_forecast_norm': self.episode_wind_forecast_norm[self.episode_timestep+1:],
+                      'wind_error': self.arma_wind.x/self.max_demand}
+    
         # Calculate fuel cost and dispatch for the demand realisation 
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
         
@@ -566,13 +572,16 @@ class Env(object):
         self.ens = False
 
         # Assign state
-        self.demand_forecast, self.demand_forecast_norm = self.get_demand_forecast() 
+        demand_forecast, demand_forecast_norm = self.get_demand_forecast() 
         self.state = {'status': self.status,
                       'status_capped': self.status_capped,
                       'status_norm': self.status_norm,
-                      'demand_forecast': self.demand_forecast,
-                      'demand_forecast_norm': self.demand_forecast_norm,
-                      'demand_error': 0.}
+                      'demand_forecast': demand_forecast,
+                      'demand_forecast_norm': demand_forecast_norm,
+                      'demand_error': 0.,
+                      'wind_forecast': self.episode_wind_forecast,
+                      'wind_forecast_norm': self.episode_wind_forecast_norm,
+                      'wind_error': 0.}
         
         return self.state
     
@@ -609,7 +618,73 @@ def create_gen_info(num_gen, dispatch_freq_mins):
     
     return gen_info
 
-def make_env(mode="train", forecast=None, reference_forecast=None, **params):
+def interpolate_profile(profile, upsample_factor):
+    """
+    Interpolate a demand/renewables profile, upsampling by a factor of 
+    upsample_factor
+    """
+    xp = np.arange(0, profile.size)*upsample_factor
+    x = np.arange(xp[-1])
+    interpolated = np.interp(x,xp,profile)
+    return interpolated
+
+def scale_profile(profile, scale_range):
+    """
+    Scale data to the range defined by tuple scale_range
+    """
+    pmax = max(scale_range)
+    pmin = min(scale_range)
+    profile_norm = (profile-np.min(profile))/np.ptp(profile)
+    profile_scaled = profile_norm * (pmax-pmin) + pmin
+    return profile_scaled
+
+def process_profile(profile, upsample_factor, scale_range, gen_info):
+    """
+    Use this to scale, upsample and normalise a profile (demand or wind). 
+    
+    Returns:
+        - profile
+        - profile_norm 
+    """
+    if upsample_factor > 1:
+        profile = interpolate_profile(profile, upsample_factor)
+    if scale_range is not None:
+        profile = scale_profile(profile, scale_range)
+    profile_norm = (profile-np.min(profile))/np.ptp(profile)
+    return profile, profile_norm
+        
+def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=None,
+              scale=True, **params):
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
+                               params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    if mode == 'train':
+        # Used for interpolating profiles from 30 min to higher resolutions
+        upsample_factor= int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+        ### DEMAND ###
+        if demand is None: # use default demand
+            demand_forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
+        demand_range = (np.sum(gen_info.max_output)*10/11, np.max(gen_info.min_output)*10/9)
+        demand_forecast, demand_forecast_norm = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
+    
+        ### WIND ###
+        if wind is None: # use default wind
+            wind_forecast = np.loadtxt(os.path.join(script_dir, 'data/whitelee1.txt'))
+        wind_range = (0,100)
+        wind_forecast, wind_forecast_norm = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
+    
+    if mode == 'test':
+        raise ValueError("Testing mode not yet implemented")
+        
+    env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
+              demand_forecast_norm=demand_forecast_norm, wind_forecast=wind_forecast,
+              wind_forecast_norm=wind_forecast_norm, mode=mode, **params)
+    env.reset()
+    
+    return env
+        
+
+def make_env_old(mode="train", demand_forecast=None, reference_demand_forecast=None, **params):
     """
     Create an environment. 
     
@@ -620,35 +695,31 @@ def make_env(mode="train", forecast=None, reference_forecast=None, **params):
     
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
                                params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-   
-    if forecast is None:
-        # Default forecast is National Grid 5 years, at 30 mins resolution
-        forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
-            
-        # Interpolate forecast
-        upsample_factor = int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-        xp = np.arange(0, forecast.size)*upsample_factor
-        x = np.arange(xp[-1])
-        forecast = np.interp(x, xp, forecast)
-        
-        forecast_scaled = scale_demand(forecast, forecast, gen_info)
-        forecast_norm = (forecast_scaled - min(forecast_scaled))/np.ptp(forecast_scaled)
-    elif (forecast is not None) and (reference_forecast is not None):
-        # If both forecast and reference_forecast are given, then first scale reference forecast,
-        # then use scaled reference forecast to scale forecast...
-        reference_forecast_scaled = scale_demand(reference_forecast, reference_forecast, gen_info)
-        forecast_scaled = scale_demand(reference_forecast, forecast, gen_info)
-        forecast_norm = (forecast_scaled - min(reference_forecast_scaled))/np.ptp(reference_forecast_scaled)
-    elif (forecast is not None) and (reference_forecast is None):
-        # This can be used when the normalised forecast is not needed: for instance,
-        # when just testing a schedule through the environment (without any policy).
-        # In this case the forecast should already be scaled
-        forecast_scaled = forecast
-        forecast_norm = (forecast_scaled - np.min(forecast_scaled)) / np.ptp(forecast_scaled)
+    
+    if demand_forecast is None: 
+        if reference_demand_forecast is None: # neither demand or reference demand are given
+            demand_forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt')) # Default demand forecast from NG (half-hourly resolution)
+            upsample_factor= int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+            demand_forecast = interpolate_profile(demand_forecast, upsample_factor)
+            demand_forecast = scale_demand(demand_forecast, demand_forecast, gen_info) # Scale raw demand to gen_info
+            demand_forecast_norm = (demand_forecast - np.min(demand_forecast))/np.ptp(demand_forecast)
+        else: # only reference demand is given
+            raise ValueError("cannot pass reference_demand_forecast on its own")
+    
     else:
-        raise ValueError("Can't pass `reference_forecast` on its own. Must provide `forecast`")
+        if reference_demand_forecast is not None: # demand forecast and reference are given
+            reference_demand_forecast = scale_demand(reference_demand_forecast, reference_demand_forecast, gen_info)
+            demand_forecast = scale_demand(reference_demand_forecast, demand_forecast, gen_info)
+            demand_forecast_norm = (demand_forecast - np.min(reference_demand_forecast))/np.ptp(reference_demand_forecast)
+        else: # demand forecast and no reference are given
+            demand_forecast_norm = (demand_forecast - np.min(demand_forecast))/np.ptp(demand_forecast)
 
-    env = Env(gen_info, forecast_scaled, forecast_norm, mode, **params)
+    wind = np.random.uniform(0,100,1000)
+    wind_norm = (wind - np.min(wind))/np.ptp(wind)
+
+    env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
+              demand_forecast_norm=demand_forecast_norm, wind_forecast=wind,
+              wind_forecast_norm=wind_norm, mode=mode, **params)
     env.reset()
             
     return env
