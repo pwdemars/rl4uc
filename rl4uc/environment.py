@@ -667,7 +667,9 @@ def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=Non
         ### DEMAND ###
         if demand is None: # use default demand
             demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
-        demand_range = (np.sum(gen_info.max_output)*10/11, np.max(gen_info.min_output)*10/9)
+        DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
+        DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
+        demand_range = (DEMAND_LOWER, DEMAND_UPPER)
         demand_forecast, demand_forecast_norm = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
     
         ### WIND ###
