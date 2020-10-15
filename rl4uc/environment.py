@@ -8,6 +8,9 @@ from scipy.stats import norm
 from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
 
+DEFAULT_DEMAND_DATA_FN='data/NG_data_5_years.txt'
+DEFAULT_WIND_DATA_FN='data/whitelee1.txt'
+
 DEFAULT_VOLL=1000
 DEFAULT_EPISODE_LENGTH=336
 DEFAULT_DISPATCH_RESOLUTION=0.5
@@ -663,19 +666,21 @@ def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=Non
         upsample_factor= int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
         ### DEMAND ###
         if demand is None: # use default demand
-            demand_forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt'))
+            demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
         demand_range = (np.sum(gen_info.max_output)*10/11, np.max(gen_info.min_output)*10/9)
         demand_forecast, demand_forecast_norm = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
     
         ### WIND ###
         if wind is None: # use default wind
-            wind_forecast = np.loadtxt(os.path.join(script_dir, 'data/whitelee1.txt'))
-        wind_range = (0,100)
+            wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
+        MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
+        wind_range = (0, MAX_WIND)
         wind_forecast, wind_forecast_norm = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
     
     if mode == 'test':
         raise ValueError("Testing mode not yet implemented")
-        
+    
+    # Create environment object
     env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
               demand_forecast_norm=demand_forecast_norm, wind_forecast=wind_forecast,
               wind_forecast_norm=wind_forecast_norm, mode=mode, **params)
