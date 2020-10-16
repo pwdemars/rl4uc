@@ -62,18 +62,13 @@ class Env(object):
     
     TODO: wind
     """
-    def __init__(self, gen_info, demand_forecast, demand_forecast_norm, wind_forecast,
-                 wind_forecast_norm, mode='train', **kwargs):
-        if mode not in ['test', 'train']:
-            raise ValueError("Invalid mode: must be test or train")
-        
+    def __init__(self, gen_info, demand_forecast, wind_forecast,
+                 mode='train', **kwargs):
+
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
         self.all_forecast = demand_forecast
-        self.all_forecast_norm = demand_forecast_norm
-        
         self.all_wind = wind_forecast
-        self.all_wind_norm = wind_forecast_norm
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
@@ -132,7 +127,6 @@ class Env(object):
         self.gen_info['heat_rates'] = self.heat_rates
         
         self.forecast = None
-        self.forecast_norm = None
         self.start_cost = 0
         self.infeasible=False
         
@@ -206,9 +200,7 @@ class Env(object):
         # Advance demand 
         self.episode_timestep += 1
         self.forecast = self.episode_forecast[self.episode_timestep]
-        self.forecast_norm = self.episode_forecast_norm[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
-        self.wind_forecast_norm = self.episode_wind_forecast_norm[self.episode_timestep]
         
         # Sample demand realisation
         self.net_demand = self.get_net_demand(deterministic)
@@ -227,7 +219,6 @@ class Env(object):
         self.cap_and_normalise_status()
 
         # Assign state
-        demand_forecast, demand_forecast_norm = self.get_demand_forecast()  
         state = self.get_state()
     
         # Calculate fuel cost and dispatch for the demand realisation 
@@ -253,11 +244,10 @@ class Env(object):
                  'status_capped': self.status_capped,
                  'status_norm': self.status_norm,
                  'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
-                 'demand_forecast_norm': self.episode_forecast_norm[self.episode_timestep+1:],
                  'demand_error': self.arma_demand.x/self.max_demand,
                  'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                 'wind_forecast_norm': self.episode_wind_forecast_norm[self.episode_timestep+1:],
                  'wind_error': self.arma_wind.x/self.max_demand}
+        self.state = state
         return state
 
     def get_reward(self, net_demand):
@@ -282,6 +272,8 @@ class Env(object):
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
         else: 
             reward = -operating_cost
+
+        self.reward=reward
 
         return reward
 
@@ -335,15 +327,6 @@ class Env(object):
         operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
         
         return -operating_cost, is_ens
-        
-    def get_demand_forecast(self):
-        """
-        Return the absolute and normalised demand forecasts for the next 
-        forecast_length periods. Used to update the state attribute. 
-        """
-        demand_forecast = self.episode_forecast[self.episode_timestep+1:]
-        demand_forecast_norm = self.episode_forecast_norm[self.episode_timestep+1:]
-        return demand_forecast, demand_forecast_norm
         
     def update_gen_status(self, action):
         """Subroutine updating generator statuses.""" 
@@ -497,7 +480,7 @@ class Env(object):
         less common.
         """
         # Infeasible if demand can't be met in current period (except in initial period)
-        if self.episode_timestep > 0:
+        if self.episode_timestep >= 0:
             if np.dot(self.commitment, self.max_output) < self.forecast:
                 return False
         
@@ -510,7 +493,7 @@ class Env(object):
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
-            demand = self.episode_forecast[self.episode_timestep+t+1] # Nominal demand for t+1th period ahead
+            demand = self.episode_forecast[self.episode_timestep+t] # Nominal demand for t+1th period ahead
             future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
             available_generators = (-future_status >= self.t_min_down) | self.commitment # Determines the availability of generators as binary array
@@ -549,15 +532,13 @@ class Env(object):
             # Initialise timestep and choose random hour to begin episode 
             x = np.random.choice(self.all_forecast.size - 2*self.episode_length) # leave some buffer
             self.episode_forecast = self.all_forecast[x:x+self.episode_length]
-            self.episode_forecast_norm = self.all_forecast_norm[x:x+self.episode_length]
             
             x = np.random.choice(self.all_wind.size-2*self.episode_length)
             self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
-            self.episode_wind_forecast_norm = self.all_wind_norm[x:x+self.episode_length]
             
         else:
             self.episode_forecast = self.all_forecast
-            self.episode_forecast_norm = self.all_forecast_norm
+            self.episode_wind_forecast = self.all_wind
         
         # Resetting episode variables
         self.episode_timestep = -1
@@ -579,7 +560,6 @@ class Env(object):
         self.ens = False
 
         # Assign state
-        demand_forecast, demand_forecast_norm = self.get_demand_forecast() 
         state = self.get_state()
         
         return state
@@ -649,8 +629,7 @@ def process_profile(profile, upsample_factor, scale_range, gen_info):
         profile = interpolate_profile(profile, upsample_factor)
     if scale_range is not None:
         profile = scale_profile(profile, scale_range)
-    profile_norm = (profile-np.min(profile))/np.ptp(profile)
-    return profile, profile_norm
+    return profile 
         
 def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=None,
               scale=True, **params):
@@ -666,22 +645,26 @@ def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=Non
         DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
         DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
         demand_range = (DEMAND_LOWER, DEMAND_UPPER)
-        demand_forecast, demand_forecast_norm = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
+        demand_forecast = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
     
         ### WIND ###
         if wind is None: # use default wind
             wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
         MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
         wind_range = (0, MAX_WIND)
-        wind_forecast, wind_forecast_norm = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
+        wind_forecast = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
     
     if mode == 'test':
-        raise ValueError("Testing mode not yet implemented")
+        if demand is None:
+            raise ValueError("Must supply mode for testing")
+        if wind is None:
+            raise ValueError("Must supply wind for testing")
+        demand_forecast = demand
+        wind_forecast = wind
     
     # Create environment object
     env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
-              demand_forecast_norm=demand_forecast_norm, wind_forecast=wind_forecast,
-              wind_forecast_norm=wind_forecast_norm, mode=mode, **params)
+              wind_forecast=wind_forecast, mode=mode, **params)
     env.reset()
     
     return env
