@@ -72,7 +72,7 @@ class Env(object):
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
-        self.dispatch_freq_mins = kwargs.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
+        self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
@@ -637,10 +637,10 @@ def make_env(mode='train', demand=None, wind=None, **params):
     """
     script_dir = os.path.dirname(os.path.realpath(__file__))
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
-                               params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+                               params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
     if mode == 'train':
         # Used for interpolating profiles from 30 min to higher resolutions
-        upsample_factor= int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+        upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
         ### DEMAND ###
         if demand is None: # use default demand
             demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
