@@ -9,7 +9,7 @@ from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
 
 DEFAULT_DEMAND_DATA_FN='data/NG_data_5_years.txt'
-DEFAULT_WIND_DATA_FN='data/whitelee1.txt'
+DEFAULT_WIND_DATA_FN='data/whitelee_train_pre2019.txt'
 
 DEFAULT_VOLL=1000
 DEFAULT_EPISODE_LENGTH=336
@@ -631,8 +631,10 @@ def process_profile(profile, upsample_factor, scale_range, gen_info):
         profile = scale_profile(profile, scale_range)
     return profile 
         
-def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=None,
-              scale=True, **params):
+def make_env(mode='train', demand=None, wind=None, **params):
+    """
+    Create an environment object.
+    """
     script_dir = os.path.dirname(os.path.realpath(__file__))
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
                                params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
@@ -668,44 +670,4 @@ def make_env(mode='train', demand=None, wind=None, ref_demand=None, ref_wind=Non
     env.reset()
     
     return env
-        
 
-def make_env_old(mode="train", demand_forecast=None, reference_demand_forecast=None, **params):
-    """
-    Create an environment. 
-    
-    The params file must include the number of generators 
-    """
-    
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-    
-    gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
-                               params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-    
-    if demand_forecast is None: 
-        if reference_demand_forecast is None: # neither demand or reference demand are given
-            demand_forecast = np.loadtxt(os.path.join(script_dir, 'data/NG_data_5_years.txt')) # Default demand forecast from NG (half-hourly resolution)
-            upsample_factor= int(30/params.get('env_dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-            demand_forecast = interpolate_profile(demand_forecast, upsample_factor)
-            demand_forecast = scale_demand(demand_forecast, demand_forecast, gen_info) # Scale raw demand to gen_info
-            demand_forecast_norm = (demand_forecast - np.min(demand_forecast))/np.ptp(demand_forecast)
-        else: # only reference demand is given
-            raise ValueError("cannot pass reference_demand_forecast on its own")
-    
-    else:
-        if reference_demand_forecast is not None: # demand forecast and reference are given
-            reference_demand_forecast = scale_demand(reference_demand_forecast, reference_demand_forecast, gen_info)
-            demand_forecast = scale_demand(reference_demand_forecast, demand_forecast, gen_info)
-            demand_forecast_norm = (demand_forecast - np.min(reference_demand_forecast))/np.ptp(reference_demand_forecast)
-        else: # demand forecast and no reference are given
-            demand_forecast_norm = (demand_forecast - np.min(demand_forecast))/np.ptp(demand_forecast)
-
-    wind = np.random.uniform(0,100,1000)
-    wind_norm = (wind - np.min(wind))/np.ptp(wind)
-
-    env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
-              demand_forecast_norm=demand_forecast_norm, wind_forecast=wind,
-              wind_forecast_norm=wind_norm, mode=mode, **params)
-    env.reset()
-            
-    return env
