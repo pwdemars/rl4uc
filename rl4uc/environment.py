@@ -16,7 +16,7 @@ DEFAULT_EPISODE_LENGTH=336
 DEFAULT_DISPATCH_RESOLUTION=0.5
 DEFAULT_DISPATCH_FREQ_MINS=30
 DEFAULT_UNCERTAINTY_PARAM=0.
-DEFAULT_MIN_REWARD_SCALE=-3000
+DEFAULT_MIN_REWARD_SCALE=-5000
 DEFAULT_NUM_GEN=5
 DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
@@ -372,15 +372,15 @@ class Env(object):
             
         return disp
 
-    def calculate_fuel_costs(self, output, commitment):
+    def calculate_fuel_costs(self, output):
         """ 
         Calculate total fuel costs for each generator, returning the sum.
 
         The fuel costs are quadratic: c = ax^2 + bx + c
         """
-        costs = np.multiply(output, np.square(self.a)) + np.dot(output, self.b) + self.c
-        costs = np.dot(commitment, costs) # Don't count fuel costs for offline generators
+        costs = np.multiply(output, np.square(self.a)) + np.multiply(output, self.b) + self.c
         costs = costs * self.dispatch_resolution # Convert to MWh by multiplying by dispatch resolution in hrs
+        costs = np.sum(costs)
         return costs
         
     def calculate_start_costs(self, action):
@@ -451,7 +451,7 @@ class Env(object):
         disp = self.economic_dispatch(self.commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = self.calculate_fuel_costs(disp, self.commitment)
+        fuel_cost = self.calculate_fuel_costs(disp)
         
         return fuel_cost, disp
         
