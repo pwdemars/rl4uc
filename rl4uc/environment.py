@@ -91,6 +91,11 @@ class Env(object):
         # ARMA processes for demand and wind
         self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
         self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind')
+
+        # Initialise ARMAs and set parameters
+        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
+        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
+
         if self.mode == 'train':
             self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
             self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/20, p=0.999)
