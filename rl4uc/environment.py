@@ -87,12 +87,20 @@ class Env(object):
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
         
-        # Parameters for ARMA demand
+        # ARMA processes for demand and wind
         self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
-        self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-        
-        # Parameters for ARMA wind
-        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
+        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind')
+        if self.mode == 'train':
+            self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
+            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/20, p=0.999)
+        else:
+            if None in [kwargs.get('demand_sigma'), kwargs.get('wind_sigma')]:
+                raise ValueError("Must supply sigmas for demand and wind ARMAs when testing")
+            else:
+                self.arma_demand.sigma = kwargs.get('demand_sigma')
+                self.arma_wind.sigma = kwargs.get('wind_sigma')
+
+        print(self.arma_demand.sigma, self.arma_wind.sigma)
         
         # Penalty factor for committing excess capacity, usedi n training reward function 
         self.excess_capacity_penalty_factor = (self.num_gen * 
