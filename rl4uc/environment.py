@@ -280,7 +280,7 @@ class Env(object):
         
         if self.mode == 'train':
             # Spare capacity penalty:
-            reserve_margin = np.dot(self.commitment, self.max_output)/self.forecast - 1
+            reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
             excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
 
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
@@ -549,7 +549,7 @@ class Env(object):
             
             x = np.random.choice(self.all_wind.size-2*self.episode_length)
             self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
-            
+
         else:
             self.episode_forecast = self.all_forecast
             self.episode_wind_forecast = self.all_wind
