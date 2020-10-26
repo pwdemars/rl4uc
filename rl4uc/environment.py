@@ -495,7 +495,7 @@ class Env(object):
         """
         # Infeasible if demand can't be met in current period (except in initial period)
         if self.episode_timestep >= 0:
-            if np.dot(self.commitment, self.max_output) < self.forecast:
+            if np.dot(self.commitment, self.max_output) < self.net_demand:
                 return False
         
         # If all generators are on, demand can definitely be met (upwards)
@@ -507,13 +507,13 @@ class Env(object):
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
         for t in range(horizon):
-            demand = self.episode_forecast[self.episode_timestep+t] # Nominal demand for t+1th period ahead
+            net_demand = self.episode_forecast[self.episode_timestep+t] - self.episode_wind_forecast[self.episode_timestep+t] # Nominal demand for t+1th period ahead
             future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
             available_generators = (-future_status >= self.t_min_down) | self.commitment # Determines the availability of generators as binary array
             available_cap = np.dot(available_generators, self.max_output)
             
-            if available_cap < demand:
+            if available_cap < net_demand:
                 return False
         
         # If all of the above is satisfied, return True 
