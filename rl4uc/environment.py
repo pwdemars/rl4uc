@@ -184,6 +184,7 @@ class Env(object):
             error = 0 
         demand_real = self.forecast + error
         demand_real = max(0, demand_real)
+        self.demand_real = demand_real
         
         # Wind realisation
         if deterministic is False:
@@ -192,6 +193,7 @@ class Env(object):
             error = 0 
         wind_real = self.wind_forecast + error
         wind_real = max(0, wind_real)
+        self.wind_real = wind_real
         
         # Net demand is demand - wind 
         net_demand = demand_real - wind_real
