@@ -129,7 +129,7 @@ class Env(object):
         self.cold_hrs = self.gen_info['cold_hrs'].to_numpy()
         
         # Min and max demand for clipping demand profiles
-        self.min_demand = np.min(self.min_output)
+        self.min_demand = np.max(self.min_output)
         self.max_demand = np.sum(self.max_output)
         
         self.forecast_length = kwargs.get('forecast_length', max(self.t_min_down))
