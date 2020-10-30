@@ -674,7 +674,7 @@ def make_env(mode='train', demand=None, wind=None, **params):
     
     if mode == 'test':
         if demand is None:
-            raise ValueError("Must supply mode for testing")
+            raise ValueError("Must supply demand for testing")
         if wind is None:
             raise ValueError("Must supply wind for testing")
         demand_forecast = demand
