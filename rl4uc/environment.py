@@ -98,7 +98,7 @@ class Env(object):
 
         if self.mode == 'train':
             self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/20, p=0.999)
+            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
         else:
             if None in [kwargs.get('demand_sigma'), kwargs.get('wind_sigma')]:
                 raise ValueError("Must supply sigmas for demand and wind ARMAs when testing")
