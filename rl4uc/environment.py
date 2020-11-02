@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd 
 import os
-from scipy.stats import norm
+from scipy.stats import norm, expon
 
 from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
@@ -21,6 +21,29 @@ DEFAULT_NUM_GEN=5
 DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 2e3
+
+
+class NStepARMA(object):
+    """
+    ARMA(N,N) process. May be used for demand or wind. 
+    """
+    def __init__(self, N, alphas, betas, sigma, name):
+        self.alphas=alphas
+        self.betas=betas
+        self.name=name
+        self.sigma=sigma
+        self.xs=np.zeros(N) # last N errors
+        self.zs=np.zeros(N) # last N white noise samples
+    
+    def sample_error(self):
+        zt = np.random.normal(0, self.sigma)
+        xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
+        self.xs = np.roll(self.xs, 1)
+        self.zs = np.roll(self.zs, 1)
+        self.xs[0] = xt
+        self.zs[0] = zt
+
+        return xt
 
 class ARMAProcess(object):
     """
@@ -87,24 +110,33 @@ class Env(object):
                            self.dispatch_resolution) 
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
+
+        ARMA_N = 5
+        ALPHAS = expon.pdf(np.arange(ARMA_N))
+        ALPHAS = 0.9999*ALPHAS/np.sum(ALPHAS)
+        BETAS = expon.pdf(np.arange(ARMA_N))
+        BETAS = 0.9999*BETAS/np.sum(BETAS)
+
+        self.arma_demand = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=5., name='demand')
+        self.arma_wind = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=3., name='wind')
         
         # ARMA processes for demand and wind
-        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
-        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind')
+#        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
+#        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind')
 
         # Initialise ARMAs and set parameters
-        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
-        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
+#        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
+#        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
 
-        if self.mode == 'train':
-            self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-        else:
-            if None in [kwargs.get('demand_sigma'), kwargs.get('wind_sigma')]:
-                raise ValueError("Must supply sigmas for demand and wind ARMAs when testing")
-            else:
-                self.arma_demand.sigma = kwargs.get('demand_sigma')
-                self.arma_wind.sigma = kwargs.get('wind_sigma')
+#        if self.mode == 'train':
+#            self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
+#            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
+#        else:
+#            if None in [kwargs.get('demand_sigma'), kwargs.get('wind_sigma')]:
+#                raise ValueError("Must supply sigmas for demand and wind ARMAs when testing")
+#            else:
+#                self.arma_demand.sigma = kwargs.get('demand_sigma')
+#                self.arma_wind.sigma = kwargs.get('wind_sigma')
 
         print(self.arma_demand.sigma, self.arma_wind.sigma)
         
@@ -260,9 +292,9 @@ class Env(object):
                  'status_capped': self.status_capped,
                  'status_norm': self.status_norm,
                  'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
-                 'demand_error': self.arma_demand.x/self.max_demand,
+                 'demand_error': self.arma_demand.xs[0]/self.max_demand,
                  'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                 'wind_error': self.arma_wind.x/self.max_demand}
+                 'wind_error': self.arma_wind.xs[0]/self.max_demand}
         self.state = state
         return state
 
