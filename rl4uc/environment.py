@@ -111,14 +111,26 @@ class Env(object):
         self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
 
-        ARMA_N = 5
-        ALPHAS = expon.pdf(np.arange(ARMA_N))
-        ALPHAS = 0.9999*ALPHAS/np.sum(ALPHAS)
-        BETAS = expon.pdf(np.arange(ARMA_N))
-        BETAS = 0.9999*BETAS/np.sum(BETAS)
+        # Set up the ARMA processes.
+        arma_params = kwargs.get('arma_params')
+        self.arma_demand = NStepARMA(N=arma_params['n'],
+                                   alphas=arma_params['alphas_demand'],
+                                   betas=arma_params['betas_demand'],
+                                   sigma=arma_params['sigma_demand'],
+                                   name='demand')
+        self.arma_wind = NStepARMA(N=arma_params['n'],
+                                   alphas=arma_params['alphas_wind'],
+                                   betas=arma_params['betas_wind'],
+                                   sigma=arma_params['sigma_wind'],
+                                   name='wind')
 
-        self.arma_demand = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=5., name='demand')
-        self.arma_wind = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=3., name='wind')
+#        ALPHAS = expon.pdf(np.arange(ARMA_N))
+#        ALPHAS = 0.9999*ALPHAS/np.sum(ALPHAS)
+#        BETAS = expon.pdf(np.arange(ARMA_N))
+#        BETAS = 0.9999*BETAS/np.sum(BETAS)
+
+#        self.arma_demand = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=5., name='demand')
+#        self.arma_wind = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=3., name='wind')
         
         # ARMA processes for demand and wind
 #        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
@@ -137,8 +149,6 @@ class Env(object):
 #            else:
 #                self.arma_demand.sigma = kwargs.get('demand_sigma')
 #                self.arma_wind.sigma = kwargs.get('wind_sigma')
-
-        print(self.arma_demand.sigma, self.arma_wind.sigma)
         
         # Penalty factor for committing excess capacity, usedi n training reward function 
         self.excess_capacity_penalty_factor = (self.num_gen * 
