@@ -27,21 +27,25 @@ class NStepARMA(object):
     """
     ARMA(N,N) process. May be used for demand or wind. 
     """
-    def __init__(self, N, alphas, betas, sigma, name):
+    def __init__(self, p, q, alphas, betas, sigma, name):
+        self.p=p
+        self.q=q
         self.alphas=alphas
         self.betas=betas
         self.name=name
         self.sigma=sigma
-        self.xs=np.zeros(N) # last N errors
-        self.zs=np.zeros(N) # last N white noise samples
+        self.xs=np.zeros(p) # last N errors
+        self.zs=np.zeros(q) # last N white noise samples
     
     def sample_error(self):
         zt = np.random.normal(0, self.sigma)
         xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
         self.xs = np.roll(self.xs, 1)
         self.zs = np.roll(self.zs, 1)
-        self.xs[0] = xt
-        self.zs[0] = zt
+        if self.p>0:
+            self.xs[0] = xt
+        if self.q>0:
+            self.zs[0] = zt
 
         return xt
 
@@ -113,12 +117,14 @@ class Env(object):
 
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params')
-        self.arma_demand = NStepARMA(N=arma_params['n'],
-                                   alphas=arma_params['alphas_demand'],
-                                   betas=arma_params['betas_demand'],
-                                   sigma=arma_params['sigma_demand'],
-                                   name='demand')
-        self.arma_wind = NStepARMA(N=arma_params['n'],
+        self.arma_demand = NStepARMA(p=arma_params['p'],
+                                     q=arma_params['q'],
+                                     alphas=arma_params['alphas_demand'],
+                                     betas=arma_params['betas_demand'],
+                                     sigma=arma_params['sigma_demand'],
+                                     name='demand')
+        self.arma_wind = NStepARMA(p=arma_params['p'],
+                                   q=arma_params['q'],
                                    alphas=arma_params['alphas_wind'],
                                    betas=arma_params['betas_wind'],
                                    sigma=arma_params['sigma_wind'],
