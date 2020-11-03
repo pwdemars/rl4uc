@@ -129,32 +129,6 @@ class Env(object):
                                    betas=arma_params['betas_wind'],
                                    sigma=arma_params['sigma_wind'],
                                    name='wind')
-
-#        ALPHAS = expon.pdf(np.arange(ARMA_N))
-#        ALPHAS = 0.9999*ALPHAS/np.sum(ALPHAS)
-#        BETAS = expon.pdf(np.arange(ARMA_N))
-#        BETAS = 0.9999*BETAS/np.sum(BETAS)
-
-#        self.arma_demand = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=5., name='demand')
-#        self.arma_wind = NStepARMA(N=ARMA_N, alphas=ALPHAS, betas=BETAS, sigma=3., name='wind')
-        
-        # ARMA processes for demand and wind
-#        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
-#        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind')
-
-        # Initialise ARMAs and set parameters
-#        self.arma_demand = ARMAProcess(alpha=0.99, beta=0.1, name='demand')
-#        self.arma_wind = ARMAProcess(alpha=0.95, beta=0.01, name='wind', sigma=1)
-
-#        if self.mode == 'train':
-#            self.arma_demand.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-#            self.arma_wind.set_sigma(x=sum(self.gen_info.max_output)/10, p=0.999)
-#        else:
-#            if None in [kwargs.get('demand_sigma'), kwargs.get('wind_sigma')]:
-#                raise ValueError("Must supply sigmas for demand and wind ARMAs when testing")
-#            else:
-#                self.arma_demand.sigma = kwargs.get('demand_sigma')
-#                self.arma_wind.sigma = kwargs.get('wind_sigma')
         
         # Penalty factor for committing excess capacity, usedi n training reward function 
         self.excess_capacity_penalty_factor = (self.num_gen * 
