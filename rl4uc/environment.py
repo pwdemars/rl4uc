@@ -308,9 +308,9 @@ class Env(object):
                  'status_capped': self.status_capped,
                  'status_norm': self.status_norm,
                  'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
-                 'demand_error': self.arma_demand.xs[0]/self.max_demand,
+                 'demand_errors': self.arma_demand.xs/self.max_demand,
                  'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                 'wind_error': self.arma_wind.xs[0]/self.max_demand}
+                 'wind_errors': self.arma_wind.xs/self.max_demand}
         self.state = state
         return state
 
