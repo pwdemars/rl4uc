@@ -20,8 +20,16 @@ DEFAULT_MIN_REWARD_SCALE=-5000
 DEFAULT_NUM_GEN=5
 DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
-DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 2e3
+DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
 
+DEFAULT_ARMA_PARAMS={"p":5,
+                     "q":5,   
+                     "alphas_demand":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
+                     "alphas_wind":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
+                     "betas_demand":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
+                     "betas_wind":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
+                     "sigma_demand":10,
+                     "sigma_wind":6}
 
 class NStepARMA(object):
     """
@@ -116,7 +124,7 @@ class Env(object):
         self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
 
         # Set up the ARMA processes.
-        arma_params = kwargs.get('arma_params')
+        arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
         self.arma_demand = NStepARMA(p=arma_params['p'],
                                      q=arma_params['q'],
                                      alphas=arma_params['alphas_demand'],
