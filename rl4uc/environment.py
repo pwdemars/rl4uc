@@ -56,6 +56,10 @@ class NStepARMA(object):
             self.zs[0] = zt
 
         return xt
+    
+    def reset(self):
+        self.xs = np.zeros(self.p)
+        self.zs = np.zeros(self.q)
 
 class ARMAProcess(object):
     """
@@ -589,9 +593,11 @@ class Env(object):
         # Resetting episode variables
         self.episode_timestep = -1
         self.forecast = None
-        self.last_error = 0
-        self.last_z = 0
         self.net_demand = None
+        
+        # Reset ARMAs 
+        self.arma_demand.reset()
+        self.arma_wind.reset()
         
         # Initalise grid status and constraints
         self.status = self.gen_info['status'].to_numpy()
