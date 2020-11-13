@@ -542,9 +542,9 @@ class Env(object):
         horizon = max(0, np.max((self.t_min_down + self.status)[np.where(self.commitment == 0)])) # Get the max number of time steps required to determine feasibility
         horizon = min(horizon, self.episode_length-self.episode_timestep) # Horizon only goes to end of day
         
-        for t in range(horizon):
+        for t in range(1, horizon):
             net_demand = self.episode_forecast[self.episode_timestep+t] - self.episode_wind_forecast[self.episode_timestep+t] # Nominal demand for t+1th period ahead
-            future_status = self.status + (t+1)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
+            future_status = self.status + (t)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
             available_generators = (-future_status >= self.t_min_down) | self.commitment # Determines the availability of generators as binary array
             available_cap = np.dot(available_generators, self.max_output)
