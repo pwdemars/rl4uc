@@ -207,6 +207,19 @@ class Env(object):
         pl = (a*(outputs**2) + b*outputs + c)/outputs
         return pl
     
+    def is_legal(self, action):
+        """
+        Check if an action satisfies minimum up/down time constraints
+        """
+        illegal_on = np.any(action[self.must_on] == 0)
+        illegal_off = np.any(action[self.must_off] == 1)
+        if any([illegal_on, illegal_off]):
+            print("Illegal action")
+            return False
+        else:
+            return True
+
+    
     def get_net_demand(self, deterministic):
         """
         Sample demand and wind realisations to get net demand forecast. 
@@ -246,6 +259,10 @@ class Env(object):
         """
         # Fix constrained generators (if necessary)
         action = self.legalise_action(action)
+        
+        # Check if action is legal
+        # if self.is_legal(action) is False:
+        #     print("ILLEGAL")
         
         # Advance demand 
         self.episode_timestep += 1
