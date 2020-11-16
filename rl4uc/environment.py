@@ -211,6 +211,7 @@ class Env(object):
         """
         Check if an action satisfies minimum up/down time constraints
         """
+        action = np.array(action)
         illegal_on = np.any(action[self.must_on] == 0)
         illegal_off = np.any(action[self.must_off] == 1)
         if any([illegal_on, illegal_off]):
@@ -258,11 +259,11 @@ class Env(object):
         period before the dispatch in order to calculate start costs.
         """
         # Fix constrained generators (if necessary)
-        action = self.legalise_action(action)
+        # action = self.legalise_action(action)
         
         # Check if action is legal
-        # if self.is_legal(action) is False:
-        #     print("ILLEGAL")
+        if self.is_legal(action) is False:
+            print("ILLEGAL")
         
         # Advance demand 
         self.episode_timestep += 1
@@ -276,7 +277,7 @@ class Env(object):
         self.start_cost = self.calculate_start_costs(action)
         
         # Update generator status
-        self.commitment = action
+        self.commitment = np.array(action)
         self.update_gen_status(action)
         
         # Get available actions
@@ -563,7 +564,7 @@ class Env(object):
             net_demand = self.episode_forecast[self.episode_timestep+t] - self.episode_wind_forecast[self.episode_timestep+t] # Nominal demand for t+1th period ahead
             future_status = self.status + (t)*np.where(self.status >0, 1, -1) # Assume all generators are kept on where possible
             
-            available_generators = (-future_status >= self.t_min_down) | self.commitment # Determines the availability of generators as binary array
+            available_generators = np.logical_or((-future_status >= self.t_min_down), self.commitment) # Determines the availability of generators as binary array
             available_cap = np.dot(available_generators, self.max_output)
             
             if available_cap < net_demand:
