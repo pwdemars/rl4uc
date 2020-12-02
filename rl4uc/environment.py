@@ -264,7 +264,7 @@ class Env(object):
         # Check if action is legal
         if self.is_legal(action) is False:
             print("ILLEGAL")
-        
+            
         # Advance demand 
         self.episode_timestep += 1
         self.forecast = self.episode_forecast[self.episode_timestep]
@@ -460,10 +460,11 @@ class Env(object):
         idx = np.where(idx)[0]
         start_cost = 0
         for i in idx:
-            if abs(self.commitment[i]) <= self.cold_hrs[i]: #####
-                start_cost += self.hot_cost[i]
-            else:
-                start_cost += self.cold_cost[i]
+#            if abs(self.commitment[i]) <= self.cold_hrs[i]: #####
+#                start_cost += self.hot_cost[i]
+#            else:
+#                start_cost += self.cold_cost[i]
+            start_cost += self.hot_cost[i]
         
         return start_cost
 
