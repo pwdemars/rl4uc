@@ -173,6 +173,9 @@ class Env(object):
         # Calculate heat rates (the cost per MWh at max output for each generator)
         self.heat_rates = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
         self.gen_info['heat_rates'] = self.heat_rates
+
+        # Max cost per mwh
+        self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
         
         self.forecast = None
         self.start_cost = 0
@@ -458,6 +461,7 @@ class Env(object):
         # Start costs
         idx = [list(map(list, zip(action, self.commitment)))[i] == [1,0] for i in range(self.num_gen)]
         idx = np.where(idx)[0]
+
         start_cost = 0
         for i in idx:
 #            if abs(self.commitment[i]) <= self.cold_hrs[i]: #####
