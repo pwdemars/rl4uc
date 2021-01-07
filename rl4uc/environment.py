@@ -21,6 +21,7 @@ DEFAULT_NUM_GEN=5
 DEFAULT_GAMMA=1.0
 DEFAULT_DEMAND_UNCERTAINTY = 0.0
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
+DEFAULT_STARTUP_MULTIPLIER=1
 
 DEFAULT_ARMA_PARAMS={"p":5,
                      "q":5,   
@@ -147,6 +148,9 @@ class Env(object):
                                                kwargs.get('excess_capacity_penalty_factor', 
                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
                                                self.dispatch_resolution)
+
+        # Startup costs are multiplied by this factor in the reward function. 
+        self.startup_multiplier = kwargs.get('startup_multiplier', DEFAULT_STARTUP_MULTIPLIER)
         
         # Generator info 
         self.max_output = self.gen_info['max_output'].to_numpy()
@@ -333,7 +337,7 @@ class Env(object):
         """
         # Operating cost is the sum of fuel cost, ENS cost and start cost.
         # Start cost is not variable: it doesn't depend on demand realisation.
-        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
+        operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost
         
         if self.mode == 'train':
             # Spare capacity penalty:
