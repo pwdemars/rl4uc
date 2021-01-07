@@ -149,8 +149,11 @@ class Env(object):
                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
                                                self.dispatch_resolution)
 
-        # Startup costs are multiplied by this factor in the reward function. 
-        self.startup_multiplier = kwargs.get('startup_multiplier', DEFAULT_STARTUP_MULTIPLIER)
+        if mode == 'train':
+            # Startup costs are multiplied by this factor in the reward function. 
+            self.startup_multiplier = kwargs.get('startup_multiplier', DEFAULT_STARTUP_MULTIPLIER)
+        else:
+            self.startup_multiplier = 1
 
         # Generator info 
         self.max_output = self.gen_info['max_output'].to_numpy()
