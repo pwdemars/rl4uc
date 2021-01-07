@@ -151,7 +151,7 @@ class Env(object):
 
         # Startup costs are multiplied by this factor in the reward function. 
         self.startup_multiplier = kwargs.get('startup_multiplier', DEFAULT_STARTUP_MULTIPLIER)
-        
+
         # Generator info 
         self.max_output = self.gen_info['max_output'].to_numpy()
         self.min_output = self.gen_info['min_output'].to_numpy()
@@ -321,7 +321,8 @@ class Env(object):
                  'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
                  'demand_errors': self.arma_demand.xs/self.max_demand,
                  'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                 'wind_errors': self.arma_wind.xs/self.max_demand}
+                 'wind_errors': self.arma_wind.xs/self.max_demand,
+                 'timestep_norm': self.episode_timestep/self.episode_length}
         self.state = state
         return state
 
