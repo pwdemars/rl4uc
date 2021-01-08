@@ -8,8 +8,9 @@ from scipy.stats import norm, expon
 from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
 
-DEFAULT_DEMAND_DATA_FN='data/NG_data_5_years.txt'
-DEFAULT_WIND_DATA_FN='data/whitelee_train_pre2019.txt'
+# DEFAULT_DEMAND_DATA_FN='data/NG_data_5_years.txt'
+# DEFAULT_WIND_DATA_FN='data/whitelee_train_pre2019.txt'
+DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
 
 DEFAULT_VOLL=10000
 DEFAULT_EPISODE_LENGTH_HRS=24
@@ -102,13 +103,14 @@ class Env(object):
     
     TODO: wind
     """
-    def __init__(self, gen_info, demand_forecast, wind_forecast,
+    def __init__(self, gen_info, profiles_df,
                  mode='train', **kwargs):
 
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
-        self.all_forecast = demand_forecast
-        self.all_wind = wind_forecast
+        self.profiles_df = profiles_df
+        # self.all_forecast = demand_forecast
+        # self.all_wind = wind_forecast
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
         self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
@@ -610,16 +612,24 @@ class Env(object):
         - Determine constraints
         """
         if self.mode == 'train':
-            # Initialise timestep and choose random hour to begin episode 
-            x = np.random.choice(self.all_forecast.size - 2*self.episode_length) # leave some buffer
-            self.episode_forecast = self.all_forecast[x:x+self.episode_length]
+            # CHoose random day
+            day = self.profiles_df.sample(1).date
+            print(day.item())
+            day_profile = self.profiles_df[self.profiles_df.date == day.item()]
+            print(len(day_profile))
+            self.episode_forecast = day_profile.demand.values
+            self.episode_wind_forecast = day_profile.wind.values
+
+            # # Initialise timestep and choose random hour to begin episode 
+            # x = np.random.choice(self.all_forecast.size - 2*self.episode_length) # leave some buffer
+            # self.episode_forecast = self.all_forecast[x:x+self.episode_length]
             
-            x = np.random.choice(self.all_wind.size-2*self.episode_length)
-            self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
+            # x = np.random.choice(self.all_wind.size-2*self.episode_length)
+            # self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
 
         else:
-            self.episode_forecast = self.all_forecast
-            self.episode_wind_forecast = self.all_wind
+            self.episode_forecast = self.profiles_df.demand
+            self.episode_wind_forecast = self.profiles_df.wind
         
         # Resetting episode variables
         self.episode_timestep = -1
@@ -685,6 +695,8 @@ def interpolate_profile(profile, upsample_factor):
     Interpolate a demand/renewables profile, upsampling by a factor of 
     upsample_factor
     """
+    if upsample_factor == 1:
+        return profile
     xp = np.arange(0, profile.size)*upsample_factor
     x = np.arange(xp[-1])
     interpolated = np.interp(x,xp,profile)
@@ -714,7 +726,7 @@ def process_profile(profile, upsample_factor, scale_range, gen_info):
         profile = scale_profile(profile, scale_range)
     return profile 
         
-def make_env(mode='train', demand=None, wind=None, **params):
+def make_env(mode='train', profiles_df=None, **params):
     """
     Create an environment object.
     """
@@ -722,39 +734,36 @@ def make_env(mode='train', demand=None, wind=None, **params):
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
                                params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
     if mode == 'train':
+        if profiles_df is None:
+            profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
+
         # Used for interpolating profiles from 30 min to higher resolutions
         upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
         # ### DEMAND ###
-        if demand is None: # use default demand
-            demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
+        # if demand is None: # use default demand
+        #     demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
         # DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
         # DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
         # demand_range = (DEMAND_LOWER, DEMAND_UPPER)
         # demand_forecast = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
 
-        demand_forecast = interpolate_profile(demand_forecast, upsample_factor)
-        demand_forecast = demand_forecast * len(gen_info)/10 # Scale up or down depending on number of generators.
+        profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
+        profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
     
         ### WIND ###
-        if wind is None: # use default wind
-            wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
+        # if wind is None: # use default wind
+        #     wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
         # MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
         # wind_range = (0, MAX_WIND)
         # wind_forecast = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
-        wind_forecast = interpolate_profile(wind_forecast, upsample_factor)
-        wind_forecast = wind_forecast * len(gen_info)/10
+        profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
+        profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
-    if mode == 'test':
-        if demand is None:
-            raise ValueError("Must supply demand for testing")
-        if wind is None:
-            raise ValueError("Must supply wind for testing")
-        demand_forecast = demand
-        wind_forecast = wind
-    
+    if mode == 'test' and profiles_df is None:
+        raise ValueError("Must supply demand and wind profiles for testing")
+
     # Create environment object
-    env = Env(gen_info=gen_info, demand_forecast=demand_forecast, 
-              wind_forecast=wind_forecast, mode=mode, **params)
+    env = Env(gen_info=gen_info, profiles_df=profiles_df, mode=mode, **params)
     env.reset()
     
     return env
