@@ -100,12 +100,12 @@ if __name__=="__main__":
 	# Now we scale both demand and wind to fit the 10 generator problem. 
 	gen_info = pd.read_csv('data/kazarlis_units_10.csv')
 	max_demand = sum(gen_info.max_output)
-	min_demand = sum(gen_info.max_output) * 0.3
+	min_demand = sum(gen_info.max_output) * 0.4
 	all_df.demand = (all_df.demand - min(all_df.demand)) / (np.ptp(all_df.demand))
 	all_df.demand = all_df.demand * (max_demand - min_demand) + min_demand
 
 	# Scale wind 
-	max_wind = sum(gen_info.max_output) * 0.2
+	max_wind = sum(gen_info.max_output) * 0.4
 	min_wind = 0
 	all_df.wind = (all_df.wind - min(all_df.wind)) / np.ptp(all_df.wind)
 	all_df.wind = all_df.wind * (max_wind - min_wind) + min_wind
