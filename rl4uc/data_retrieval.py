@@ -88,8 +88,12 @@ if __name__=="__main__":
 	print("Getting demand data...")
 	demand_df = get_demand_data(start_date, end_date)
 
+	# Merge demand and wind dfs
 	all_df = pd.merge(demand_df, wind_df, on=['date', 'period'])
+	
+	# Ensure that all days are complete and have no nas 
 	all_df = all_df.dropna()
+	all_df = all_df.groupby('date').filter(lambda x: len(x) == 48)
 
 	# Now we scale both demand and wind to fit the 10 generator problem. 
 	gen_info = pd.read_csv('data/kazarlis_units_10.csv')
@@ -116,9 +120,6 @@ if __name__=="__main__":
 	
 	# Check that wind never exceeds demand. 
 	assert(all(all_df.demand > all_df.wind)), "demand exceeds wind at some timesteps. turn down wind penetration"
-
-	# TODO: ensure that all days are complete and have exactly 48 periods 
-	# TODO: drop nans 
 
 	# Save to .csv
 	train_df.to_csv(os.path.join(SAVE_DIR, 'train_data_10gen.csv'), index=False)
