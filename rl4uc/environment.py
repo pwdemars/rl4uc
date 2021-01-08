@@ -118,7 +118,7 @@ class Env(object):
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
         if self.mode == 'test':
-            self.episode_length = len(demand_forecast)
+            self.episode_length = len(self.profiles_df)
         else:
             self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
             self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
@@ -628,8 +628,8 @@ class Env(object):
             # self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
 
         else:
-            self.episode_forecast = self.profiles_df.demand
-            self.episode_wind_forecast = self.profiles_df.wind
+            self.episode_forecast = self.profiles_df.demand.values
+            self.episode_wind_forecast = self.profiles_df.wind.values
         
         # Resetting episode variables
         self.episode_timestep = -1
