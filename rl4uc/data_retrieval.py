@@ -7,6 +7,8 @@ import requests
 import io
 import dotenv
 
+SEED = 2
+
 def get_wind_data(start_date, end_date, unit_id):
 
 	COLUMNS = ['Settlement Date', 'SP', 'Quantity (MW)'] # specify only these required columns
@@ -73,15 +75,15 @@ if __name__=="__main__":
 	os.makedirs(SAVE_DIR, exist_ok=True)
 
 	WIND_UNIT_ID = 'WHILW-1' # specify the BM Unit ID to retrieve for wind data
-	# WIND_PEN = 0.07 # desired wind penetration as a decimal. NOTE: it might be safer to scale for a max wind generation. 
+	N_TESTS = 50
 
 	# Dates for entire data set
 	start_date = '2016-01-01'
 	end_date = '2019-12-31'
 
 	# Train/test split dates ([0] is beginning [1] is end)
-	train_dates = ('2016-01-01', '2018-12-31')
-	test_dates = ('2019-01-01', '2019-12-31')
+	# train_dates = ('2016-01-01', '2018-12-31')
+	# test_dates = ('2019-01-01', '2019-12-31')
 
 	print("Getting wind data...")
 	wind_df = get_wind_data(start_date, end_date, WIND_UNIT_ID)
@@ -115,8 +117,12 @@ if __name__=="__main__":
 	# all_df.wind = all_df.wind * target_wind / current_wind 
 
 	# Split train and test data
-	train_df = all_df[(all_df.date >= train_dates[0]) & (all_df.date <= train_dates[1])]
-	test_df = all_df[(all_df.date >= test_dates[0]) & (all_df.date <= test_dates[1])]
+	test_days = np.random.choice(pd.unique(all_df.date), N_TESTS, replace=False)
+	train_df = all_df[~all_df.date.isin(test_days)]
+	test_df = all_df[all_df.date.isin(test_days)]
+
+	# train_df = all_df[(all_df.date >= train_dates[0]) & (all_df.date <= train_dates[1])]
+	# test_df = all_df[(all_df.date >= test_dates[0]) & (all_df.date <= test_dates[1])]
 	
 	# Check that wind never exceeds demand. 
 	assert(all(all_df.demand > all_df.wind)), "demand exceeds wind at some timesteps. turn down wind penetration"
