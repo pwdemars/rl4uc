@@ -724,20 +724,25 @@ def make_env(mode='train', demand=None, wind=None, **params):
     if mode == 'train':
         # Used for interpolating profiles from 30 min to higher resolutions
         upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-        ### DEMAND ###
+        # ### DEMAND ###
         if demand is None: # use default demand
             demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
-        DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
-        DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
-        demand_range = (DEMAND_LOWER, DEMAND_UPPER)
-        demand_forecast = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
+        # DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
+        # DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
+        # demand_range = (DEMAND_LOWER, DEMAND_UPPER)
+        # demand_forecast = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
+
+        demand_forecast = interpolate_profile(demand_forecast, upsample_factor)
+        demand_forecast = demand_forecast * len(gen_info)/10 # Scale up or down depending on number of generators.
     
         ### WIND ###
         if wind is None: # use default wind
             wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
-        MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
-        wind_range = (0, MAX_WIND)
-        wind_forecast = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
+        # MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
+        # wind_range = (0, MAX_WIND)
+        # wind_forecast = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
+        wind_forecast = interpolate_profile(wind_forecast, upsample_factor)
+        wind_forecast = wind_forecast * len(gen_info)/10
     
     if mode == 'test':
         if demand is None:
