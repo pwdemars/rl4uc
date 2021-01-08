@@ -93,7 +93,7 @@ if __name__=="__main__":
 
 	# Now we scale both demand and wind to fit the 10 generator problem. 
 	gen_info = pd.read_csv('data/kazarlis_units_10.csv')
-	max_demand = sum(gen_info.max_output) * 10/11 # allowing +10% headroom 
+	max_demand = sum(gen_info.max_output)
 	min_demand = sum(gen_info.max_output) * 0.3
 	all_df.demand = (all_df.demand - min(all_df.demand)) / (np.ptp(all_df.demand))
 	all_df.demand = all_df.demand * (max_demand - min_demand) + min_demand
@@ -121,6 +121,6 @@ if __name__=="__main__":
 	# TODO: drop nans 
 
 	# Save to .csv
-	train_df.to_csv(os.path.join(SAVE_DIR, 'train_data.csv'), index=False)
-	test_df.to_csv(os.path.join(SAVE_DIR, 'test_data.csv'), index=False)
+	train_df.to_csv(os.path.join(SAVE_DIR, 'train_data_10gen.csv'), index=False)
+	test_df.to_csv(os.path.join(SAVE_DIR, 'test_data_10gen.csv'), index=False)
 
