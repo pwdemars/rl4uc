@@ -46,10 +46,14 @@ class NStepARMA(object):
         self.sigma=sigma
         self.xs=np.zeros(p) # last N errors
         self.zs=np.zeros(q) # last N white noise samples
-    
-    def step(self):
+
+    def sample_error(self):
         zt = np.random.normal(0, self.sigma)
         xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
+        return xt, zt
+
+    def step(self):
+        xt, zt = self.sample_error()
         self.xs = np.roll(self.xs, 1)
         self.zs = np.roll(self.zs, 1)
         if self.p>0:
