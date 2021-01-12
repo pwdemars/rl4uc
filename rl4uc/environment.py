@@ -47,7 +47,7 @@ class NStepARMA(object):
         self.xs=np.zeros(p) # last N errors
         self.zs=np.zeros(q) # last N white noise samples
     
-    def sample_error(self):
+    def step(self):
         zt = np.random.normal(0, self.sigma)
         xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
         self.xs = np.roll(self.xs, 1)
@@ -211,7 +211,7 @@ class Env(object):
         """
         # Determine demand realisation 
         if deterministic is False:
-            error = self.arma_demand.sample_error()
+            error = self.arma_demand.step()
         else:
             error = 0 
         demand_real = self.forecast + error
@@ -220,7 +220,7 @@ class Env(object):
         
         # Wind realisation
         if deterministic is False:
-            error = self.arma_wind.sample_error()
+            error = self.arma_wind.step()
         else:
             error = 0 
         wind_real = self.wind_forecast + error
