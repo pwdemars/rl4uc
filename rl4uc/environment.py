@@ -63,37 +63,6 @@ class NStepARMA(object):
         self.xs = np.zeros(self.p)
         self.zs = np.zeros(self.q)
 
-class ARMAProcess(object):
-    """
-    First order ARMA process. 
-    """
-    def __init__(self, alpha, beta, name, sigma=0):
-        self.alpha=alpha
-        self.beta=beta
-        self.name=name
-        self.sigma=sigma
-        self.x=0. # Last sampled error
-        self.z=0. # Last sampled white noise 
-    
-    def sample_error(self):
-        z = np.random.normal(0, self.sigma)
-        x = self.alpha*self.x + self.beta*self.z + z
-        self.z = z 
-        self.x = x
-        return x 
-    
-    def set_sigma(self, x, p):
-        """
-        Calculate the standard deviation for the white noise used in the ARMA process
-        based on a quantile defined by x and p: P(X<x)=p
-        
-        For instance, this might be useful for determining relaibility criteria:
-        e.g. probability of demand exceeding x should be no greater than p. 
-        """
-        num = np.square(x/norm.ppf(p))
-        denom = 1 + np.square(self.alpha + self.beta)/(1-np.square(self.alpha))
-        self.sigma=np.sqrt(num/denom)
-        
 
 class Env(object):
     """
