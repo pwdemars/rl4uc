@@ -227,6 +227,9 @@ class Env(object):
         illegal_on = np.any(action[self.must_on] == 0)
         illegal_off = np.any(action[self.must_off] == 1)
         if any([illegal_on, illegal_off]):
+            print(self.episode_timestep, action)
+            print(action[self.must_on] == 0)
+            print(action[self.must_off] == 1)
             print("Illegal action")
             return False
         else:
@@ -261,6 +264,14 @@ class Env(object):
         
         return net_demand
 
+    def roll_forecasts(self):
+        """
+        Roll forecasts forward by one timestep
+        """
+        self.episode_timestep += 1 
+        self.forecast = self.episode_forecast[self.episode_timestep]
+        self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
+
     def step(self, action, deterministic=False):
         """
         Transition a timestep forward following an action.
@@ -278,9 +289,7 @@ class Env(object):
             print("ILLEGAL")
             
         # Advance demand 
-        self.episode_timestep += 1
-        self.forecast = self.episode_forecast[self.episode_timestep]
-        self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
+        self.roll_forecasts()
         
         # Sample demand realisation
         self.net_demand = self.get_net_demand(deterministic)
