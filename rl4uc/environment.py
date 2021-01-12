@@ -209,32 +209,31 @@ class Env(object):
             return True
 
     
-    def get_net_demand(self, deterministic):
+    def get_net_demand(self, deterministic, errors):
         """
         Sample demand and wind realisations to get net demand forecast. 
         """
-        # Determine demand realisation 
-        if deterministic is False:
-            error = self.arma_demand.step()
+        if errors is not None:
+            demand_error = errors['demand']
+            wind_error = errors['wind']
+
+        elif deterministic is True:
+            demand_error = wind_error = 0
+
         else:
-            error = 0 
-        demand_real = self.forecast + error
+            demand_error = self.arma_demand.step()
+            wind_error = self.arma_wind.step()
+
+        demand_real = self.forecast + demand_error
         demand_real = max(0, demand_real)
         self.demand_real = demand_real
-        
-        # Wind realisation
-        if deterministic is False:
-            error = self.arma_wind.step()
-        else:
-            error = 0 
-        wind_real = self.wind_forecast + error
+
+        wind_real = self.wind_forecast + wind_error
         wind_real = max(0, wind_real)
         self.wind_real = wind_real
-        
-        # Net demand is demand - wind 
+
         net_demand = demand_real - wind_real
-        net_demand = np.clip(net_demand, self.min_demand, self.max_demand)    
-        
+        net_demand = np.clip(net_demand, self.min_demand, self.max_demand)
         return net_demand
 
     def roll_forecasts(self):
@@ -245,7 +244,7 @@ class Env(object):
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
-    def step(self, action, deterministic=False):
+    def step(self, action, deterministic=False, errors=None):
         """
         Transition a timestep forward following an action.
         
@@ -265,7 +264,7 @@ class Env(object):
         self.roll_forecasts()
         
         # Sample demand realisation
-        self.net_demand = self.get_net_demand(deterministic)
+        self.net_demand = self.get_net_demand(deterministic, errors)
         
         # Calculate start costs 
         self.start_cost = self.calculate_start_costs(action)
