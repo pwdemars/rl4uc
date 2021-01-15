@@ -244,59 +244,13 @@ class Env(object):
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
-    def step(self, action, deterministic=False, errors=None):
-        """
-        Transition a timestep forward following an action.
-        
-        The ordering of this function is important. The costs need to be calculated
-        AFTER the demand has rolled forward, but BEFORE the commitment is updated
-        and update_gen_status is called (because it uses the grid status of the
-        period before the dispatch in order to calculate start costs.
-        """
-        # Fix constrained generators (if necessary)
-        # action = self.legalise_action(action)
-        
-        # Check if action is legal
-        if self.is_legal(action) is False:
-            print("ILLEGAL")
-            
-        # Advance demand 
-        self.roll_forecasts()
-        
-        # Sample demand realisation
-        self.net_demand = self.get_net_demand(deterministic, errors)
-        
-        # Calculate start costs 
-        self.start_cost = self.calculate_start_costs(action)
-        
-        # Update generator status
-        self.commitment = np.array(action)
-        self.update_gen_status(action)
-        
-        # Get available actions
-        self.determine_constraints()
-        
-        # Cap and normalise status
-        self.cap_and_normalise_status()
-
-        # Assign state
-        state = self.get_state()
-    
-        # Calculate fuel cost and dispatch for the demand realisation 
-        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
-        
-        # Calculating lost load costs and marking ENS
+    def calculate_lost_load_cost(self):
         diff = abs(self.net_demand - np.sum(self.disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
-        self.ens_cost = ens_amount*self.voll*self.dispatch_resolution
-        self.ens = True if ens_amount > 0 else False
-        
-        reward = self.get_reward(self.net_demand)
-        
-        done = self.is_terminal()
-        
-        return state, reward, done
-    
+        ens_cost = ens_amount*self.voll*self.dispatch_resolution
+        return ens_cost
+        # self.ens = True if ens_amount > 0 else False
+
     def get_state(self):
         """
         Get the state dictionary. 
@@ -312,7 +266,7 @@ class Env(object):
         self.state = state
         return state
 
-    def get_reward(self, net_demand):
+    def get_reward(self):
         """
         Calculate the reward.
         
@@ -339,6 +293,49 @@ class Env(object):
 
         return reward
 
+    def transition(self, action, deterministic, errors):
+        # Check if action is legal
+        if self.is_legal(action) is False:
+            print("ILLEGAL")
+
+        # Advance demand 
+        self.roll_forecasts()
+        
+        # Sample demand realisation
+        self.net_demand = self.get_net_demand(deterministic, errors)
+        
+        # Update generator status
+        self.commitment = np.array(action)
+        self.update_gen_status(action)
+        
+        # Determine whether gens are constrained to remain on/off
+        self.determine_constraints()
+        
+        # Cap and normalise status
+        self.cap_and_normalise_status()
+
+        # Calculate operating costs
+        self.start_cost = self.calculate_start_costs()
+        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
+        self.ens_cost = self.calculate_lost_load_cost()
+        self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
+
+        # Assign state
+        state = self.get_state()
+
+        return state
+
+    def step(self, action, deterministic=False, errors=None):
+        """
+        Advance the environment forward 1 timestep, returning an observation, the reward
+        and whether the s_{t+1} is terminal. 
+        """
+        obs = self.transition(action, deterministic, errors) # Advance the environment, return an observation 
+        reward = self.get_reward() # Evaluate the reward function 
+        done = self.is_terminal() # Determine if state is terminal
+
+        return obs, reward, done
+    
     def sample_reward_new(self, x, z):
         """
         Sample a new realisation of demand, with forecast errors following an 
@@ -445,22 +442,13 @@ class Env(object):
         costs = np.sum(costs)
         return costs
         
-    def calculate_start_costs(self, action):
+    def calculate_start_costs(self):
         """
-        Calculate start costs incurred when stepping self with action.
+        Calculate start costs
         """
         # Start costs
-        idx = [list(map(list, zip(action, self.commitment)))[i] == [1,0] for i in range(self.num_gen)]
-        idx = np.where(idx)[0]
-
-        start_cost = 0
-        for i in idx:
-#            if abs(self.commitment[i]) <= self.cold_hrs[i]: #####
-#                start_cost += self.hot_cost[i]
-#            else:
-#                start_cost += self.cold_cost[i]
-            start_cost += self.hot_cost[i]
-        
+        idx = np.where(self.status == 1)[0]
+        start_cost = np.sum(self.hot_cost[idx]) # only hot costs
         return start_cost
 
     def calculate_expected_costs(self, action):
