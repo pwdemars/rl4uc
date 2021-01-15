@@ -24,13 +24,16 @@ def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
     lambda_high = np.float(lambda_high)
     lambda_mid = 0
     total_output = np.sum(calculate_loads(lambda_high, a, b, mins, maxs, num_gen))
-    while abs(total_output - load) > epsilon:
+    i = 0 # Counter ensures that this never terminates at the first iteration.
+    while abs(total_output - load) > epsilon or i < 1:
         lambda_mid = (lambda_high + lambda_low)/2
         total_output = np.sum(calculate_loads(lambda_mid, a, b, mins, maxs, num_gen))
         if total_output - load > 0:
             lambda_high = lambda_mid
         else:
             lambda_low = lambda_mid
+        i += 1 
+
     return calculate_loads(lambda_mid, a, b, mins, maxs, num_gen)
 
 def calculate_loads(lm, a, b, mins, maxs, num_gen):
