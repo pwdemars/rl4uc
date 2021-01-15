@@ -270,23 +270,24 @@ class Env(object):
         """
         Calculate the reward.
         
-        If training, the reward is a linear function of min_reward in the case of ENS
-        (increasing over the episode length) otherwise it is the negative expected cost. 
-        
-        If testing, it is always the negative expected cost (lost load is penalised)
-        at VOLL.
+        The reward function may differ between training and test modes. 
         """
         # Operating cost is the sum of fuel cost, ENS cost and start cost.
         # Start cost is not variable: it doesn't depend on demand realisation.
-        operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost
+        
         
         if self.mode == 'train':
+            operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
+
             # Spare capacity penalty:
             reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
             excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
 
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
         else: 
+
+            operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
+
             reward = -operating_cost
 
         self.reward=reward
