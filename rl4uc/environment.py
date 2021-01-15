@@ -146,7 +146,7 @@ class Env(object):
         
         # Min and max demand for clipping demand profiles
         self.min_demand = np.max(self.min_output)
-        self.max_demand = np.sum(self.max_output)
+        self.max_demand = np.sum(self.max_output) 
         
         self.forecast_length = kwargs.get('forecast_length', max(self.t_min_down))
         
@@ -249,7 +249,6 @@ class Env(object):
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
         return ens_cost
-        # self.ens = True if ens_amount > 0 else False
 
     def get_state(self):
         """
@@ -272,10 +271,6 @@ class Env(object):
         
         The reward function may differ between training and test modes. 
         """
-        # Operating cost is the sum of fuel cost, ENS cost and start cost.
-        # Start cost is not variable: it doesn't depend on demand realisation.
-        
-        
         if self.mode == 'train':
             operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
 
@@ -285,9 +280,7 @@ class Env(object):
 
             reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
         else: 
-
             operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
-
             reward = -operating_cost
 
         self.reward=reward
