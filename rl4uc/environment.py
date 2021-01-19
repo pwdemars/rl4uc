@@ -274,11 +274,14 @@ class Env(object):
         if self.mode == 'train':
             operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
 
-            # Spare capacity penalty:
-            reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
-            excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
+            # # Spare capacity penalty:
+            # reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
+            # excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
 
-            reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
+            # reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
+
+            # Reward function that is same as test version: 
+            reward = -operating_cost
         else: 
             operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
             reward = -operating_cost
