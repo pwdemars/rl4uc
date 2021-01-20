@@ -584,13 +584,6 @@ class Env(object):
             self.episode_forecast = day_profile.demand.values
             self.episode_wind_forecast = day_profile.wind.values
 
-            # # Initialise timestep and choose random hour to begin episode 
-            # x = np.random.choice(self.all_forecast.size - 2*self.episode_length) # leave some buffer
-            # self.episode_forecast = self.all_forecast[x:x+self.episode_length]
-            
-            # x = np.random.choice(self.all_wind.size-2*self.episode_length)
-            # self.episode_wind_forecast = self.all_wind[x:x+self.episode_length]
-
         else:
             self.episode_forecast = self.profiles_df.demand.values
             self.episode_wind_forecast = self.profiles_df.wind.values
