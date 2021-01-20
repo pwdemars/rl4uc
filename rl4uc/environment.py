@@ -578,7 +578,7 @@ class Env(object):
         - Determine constraints
         """
         if self.mode == 'train':
-            # CHoose random day
+            # Choose random day
             day = self.profiles_df.sample(1).date
             day_profile = self.profiles_df[self.profiles_df.date == day.item()]
             self.episode_forecast = day_profile.demand.values
@@ -598,7 +598,12 @@ class Env(object):
         self.arma_wind.reset()
         
         # Initalise grid status and constraints
-        self.status = self.gen_info['status'].to_numpy()
+        if self.mode == "train": 
+            min_max = np.array([self.t_min_down, -self.t_min_up]).transpose()
+            self.status = np.array([x[np.random.randint(2)] for x in min_max])
+        else:
+            self.status = self.gen_info['status'].to_numpy()
+
         self.commitment = np.where(self.status > 0, 1, 0)
         self.determine_constraints()
         
