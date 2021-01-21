@@ -579,8 +579,9 @@ class Env(object):
         """
         if self.mode == 'train':
             # Choose random day
-            day = self.profiles_df.sample(1).date
+            day = np.random.choice(self.profiles_df.date, 1)
             day_profile = self.profiles_df[self.profiles_df.date == day.item()]
+            self.day = day
             self.episode_forecast = day_profile.demand.values
             self.episode_wind_forecast = day_profile.wind.values
 
