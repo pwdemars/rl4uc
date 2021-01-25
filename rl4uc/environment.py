@@ -52,8 +52,14 @@ class NStepARMA(object):
         xt = np.sum(self.alphas * self.xs) + np.sum(self.betas * self.zs) + zt
         return xt, zt
 
-    def step(self):
-        xt, zt = self.sample_error()
+    def step(self, errors=None):
+        """
+        Step forward the arma process. Can take errors, a (xt, zt) tuple to move this forward deterministically. 
+        """
+        if errors is not None:
+            xt, zt = errors # If seeding
+        else:
+            xt, zt = self.sample_error()
         self.xs = np.roll(self.xs, 1)
         self.zs = np.roll(self.zs, 1)
         if self.p>0:
@@ -214,8 +220,8 @@ class Env(object):
         Sample demand and wind realisations to get net demand forecast. 
         """
         if errors is not None:
-            demand_error = errors['demand']
-            wind_error = errors['wind']
+            demand_error = self.arma_demand.step(errors['demand'])
+            wind_error = self.arma_wind.step(errors['wind'])
 
         elif deterministic is True:
             demand_error = wind_error = 0
