@@ -250,8 +250,8 @@ class Env(object):
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
-    def calculate_lost_load_cost(self):
-        diff = abs(self.net_demand - np.sum(self.disp))
+    def calculate_lost_load_cost(self, net_demand, disp):
+        diff = abs(net_demand - np.sum(disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
         return ens_cost
@@ -320,7 +320,7 @@ class Env(object):
         # Calculate operating costs
         self.start_cost = self.calculate_start_costs()
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
-        self.ens_cost = self.calculate_lost_load_cost()
+        self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
         # Assign state
