@@ -168,6 +168,7 @@ class Env(object):
         self.forecast = None
         self.start_cost = 0
         self.infeasible=False
+        self.day_cost = 0 # cost for the entire day 
         
     def determine_constraints(self):
         """
@@ -206,10 +207,10 @@ class Env(object):
         illegal_on = np.any(action[self.must_on] == 0)
         illegal_off = np.any(action[self.must_off] == 1)
         if any([illegal_on, illegal_off]):
-            print(self.episode_timestep, action)
-            print(action[self.must_on] == 0)
-            print(action[self.must_off] == 1)
             print("Illegal action")
+            print("Action: {}".format(action))
+            print("Must on: {}".format(self.must_on))
+            print("Must off: {}".format(self.must_off))
             return False
         else:
             return True
@@ -278,7 +279,7 @@ class Env(object):
         The reward function may differ between training and test modes. 
         """
         if self.mode == 'train':
-            operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
+            # operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
 
             # # Spare capacity penalty:
             # reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
@@ -287,7 +288,14 @@ class Env(object):
             # reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
 
             # Reward function that is same as test version: 
-            reward = -operating_cost
+            # reward = -operating_cost
+
+            # DAILY REWARD FUNCTION
+            if self.is_terminal():
+                reward = -self.day_cost
+            else:
+                reward = 0
+
         else: 
             operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
             reward = -operating_cost
@@ -322,6 +330,9 @@ class Env(object):
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
+
+        # Accumulate the total cost for the day
+        self.day_cost += self.start_cost + self.fuel_cost + self.ens_cost
 
         # Assign state
         state = self.get_state()
@@ -599,6 +610,7 @@ class Env(object):
         self.episode_timestep = -1
         self.forecast = None
         self.net_demand = None
+        self.day_cost = 0
         
         # Reset ARMAs 
         self.arma_demand.reset()
