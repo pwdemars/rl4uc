@@ -656,11 +656,14 @@ def create_gen_info(num_gen, dispatch_freq_mins):
     # Repeat generators
     gen10 = pd.read_csv(os.path.join(script_dir,
                                      'data/kazarlis_units_10.csv'))
-    upper_limit = int(np.floor(num_gen/10) + 1)
-    gen_info = pd.concat([gen10]*upper_limit)[:num_gen]
+    if num_gen == 5:
+        gen_info = gen10[::2] # Special: for 5 gens, take every other generator
+    else: 
+        upper_limit = int(np.floor(num_gen/10) + 1)
+        gen_info = pd.concat([gen10]*upper_limit)[:num_gen]
     gen_info = gen_info.sort_index()
     gen_info.reset_index()
-    
+
     # Scale time-related variables
     gen_info.t_min_up = gen_info.t_min_up * (60/dispatch_freq_mins)
     gen_info.t_min_down = gen_info.t_min_down *  (60/dispatch_freq_mins)
@@ -720,23 +723,10 @@ def make_env(mode='train', profiles_df=None, **params):
 
         # Used for interpolating profiles from 30 min to higher resolutions
         upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
-        # ### DEMAND ###
-        # if demand is None: # use default demand
-        #     demand_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_DEMAND_DATA_FN))
-        # DEMAND_LOWER = max(np.max(gen_info.min_output)*10/9, np.sum(gen_info.max_output)*0.1)
-        # DEMAND_UPPER = np.sum(gen_info.max_output)*10/11
-        # demand_range = (DEMAND_LOWER, DEMAND_UPPER)
-        # demand_forecast = process_profile(demand_forecast, upsample_factor, demand_range, gen_info)
-
+    
         profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
         profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
     
-        ### WIND ###
-        # if wind is None: # use default wind
-        #     wind_forecast = np.loadtxt(os.path.join(script_dir, DEFAULT_WIND_DATA_FN))
-        # MAX_WIND = sum(gen_info.max_output)/10 # 10% of max capacity 
-        # wind_range = (0, MAX_WIND)
-        # wind_forecast = process_profile(wind_forecast, upsample_factor, wind_range, gen_info)
         profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
