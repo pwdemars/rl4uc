@@ -279,7 +279,7 @@ class Env(object):
         The reward function may differ between training and test modes. 
         """
         if self.mode == 'train':
-            # operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
+            operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
 
             # # Spare capacity penalty:
             # reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
@@ -288,13 +288,13 @@ class Env(object):
             # reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
 
             # Reward function that is same as test version: 
-            # reward = -operating_cost
+            reward = -operating_cost
 
             # DAILY REWARD FUNCTION
-            if self.is_terminal():
-                reward = -self.day_cost
-            else:
-                reward = 0
+            # if self.is_terminal():
+            #     reward = -self.day_cost
+            # else:
+            #     reward = 0
 
         else: 
             operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
