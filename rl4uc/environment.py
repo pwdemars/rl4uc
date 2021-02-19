@@ -5,7 +5,6 @@ import pandas as pd
 import os
 
 from .dispatch import lambda_iteration
-from .generate_demand import scale_demand
 
 DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
 
