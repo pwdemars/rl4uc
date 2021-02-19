@@ -1,10 +1,21 @@
-from setuptools import setup
+import setuptools
 
-setup(
-   name='rl4uc',
-   version='0.0.1',
-   description='Reinforcement learning environment for the unit commitment problem',
-   author='Patrick de Mars',
-   author_email="pwdemars@gmail.com",
-   packages=['rl4uc'], 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
+    name="rl4uc-pwdemars", # Replace with your own username
+    version="0.0.1",
+    author="Patrick de Mars",
+    author_email="pwdemars@gmail.com",
+    description="Reinforcement learning environment for the unit commitment problem",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    packages=setuptools.find_packages(),
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires='>=3.6',
 )

@@ -7,7 +7,7 @@ Created on Mon Jun 11 10:02:35 2018
 """
 
 import numpy as np
-
+import time
 
 def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
     """Calculate economic dispatch using lambda iteration. 
@@ -18,7 +18,7 @@ def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
     epsilon: error as a function 
     
     Returns an array of outputs for the generators.
-    """
+    """    
     num_gen = len(a)
     lambda_low = np.float(lambda_low)
     lambda_high = np.float(lambda_high)
@@ -32,7 +32,7 @@ def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
             lambda_high = lambda_mid
         else:
             lambda_low = lambda_mid
-        i += 1 
+        i += 1
 
     return calculate_loads(lambda_mid, a, b, mins, maxs, num_gen)
 

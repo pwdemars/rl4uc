@@ -3,13 +3,10 @@
 import numpy as np
 import pandas as pd 
 import os
-from scipy.stats import norm, expon
 
 from .dispatch import lambda_iteration
 from .generate_demand import scale_demand
 
-# DEFAULT_DEMAND_DATA_FN='data/NG_data_5_years.txt'
-# DEFAULT_WIND_DATA_FN='data/whitelee_train_pre2019.txt'
 DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
 
 DEFAULT_VOLL=10000
@@ -268,7 +265,7 @@ class Env(object):
                  'demand_errors': self.arma_demand.xs/self.max_demand,
                  'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
                  'wind_errors': self.arma_wind.xs/self.max_demand,
-                 'timestep_norm': self.episode_timestep/self.episode_length}
+                 'timestep_norm':self.episode_timestep/self.episode_length}
         self.state = state
         return state
 
