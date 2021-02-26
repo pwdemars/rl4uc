@@ -11,7 +11,7 @@ pkgs = {
 }
 
 setuptools.setup(
-    name="rl4uc-pwdemars", 
+    name="rl4uc", 
     version="0.0.1",
     author="Patrick de Mars",
     author_email="pwdemars@gmail.com",
