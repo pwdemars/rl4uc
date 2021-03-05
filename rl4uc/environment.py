@@ -12,11 +12,8 @@ DEFAULT_VOLL=10000
 DEFAULT_EPISODE_LENGTH_HRS=24
 DEFAULT_DISPATCH_RESOLUTION=0.5
 DEFAULT_DISPATCH_FREQ_MINS=30
-DEFAULT_UNCERTAINTY_PARAM=0.
 DEFAULT_MIN_REWARD_SCALE=-5000
 DEFAULT_NUM_GEN=5
-DEFAULT_GAMMA=1.0
-DEFAULT_DEMAND_UNCERTAINTY = 0.0
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
 DEFAULT_STARTUP_MULTIPLIER=1
 
@@ -84,11 +81,8 @@ class Env(object):
         self.mode = mode # Test or train. Determines the reward function and is_terminal()
         self.gen_info = gen_info
         self.profiles_df = profiles_df
-        # self.all_forecast = demand_forecast
-        # self.all_wind = wind_forecast
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL)
-        self.scale = kwargs.get('uncertainty_param', DEFAULT_UNCERTAINTY_PARAM)
         self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
@@ -102,8 +96,6 @@ class Env(object):
         self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
                            self.num_gen *
                            self.dispatch_resolution) 
-        self.gamma = kwargs.get('gamma', DEFAULT_GAMMA)
-        self.demand_uncertainty = kwargs.get('demand_uncertainty', DEFAULT_DEMAND_UNCERTAINTY)
 
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
@@ -121,10 +113,10 @@ class Env(object):
                                    name='wind')
         
         # Penalty factor for committing excess capacity, usedi n training reward function 
-        self.excess_capacity_penalty_factor = (self.num_gen * 
-                                               kwargs.get('excess_capacity_penalty_factor', 
-                                                               DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
-                                               self.dispatch_resolution)
+#         self.excess_capacity_penalty_factor = (self.num_gen * 
+#                                                kwargs.get('excess_capacity_penalty_factor', 
+#                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
+#                                                self.dispatch_resolution)
 
         if mode == 'train':
             # Startup costs are multiplied by this factor in the reward function. 
@@ -280,8 +272,6 @@ class Env(object):
             # # Spare capacity penalty:
             # reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
             # excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
-
-            # reward = self.min_reward if self.ens else -operating_cost - excess_capacity_penalty
 
             # Reward function that is same as test version: 
             reward = -operating_cost
@@ -682,30 +672,29 @@ def interpolate_profile(profile, upsample_factor):
     interpolated = np.interp(x,xp,profile)
     return interpolated
 
-def scale_profile(profile, scale_range):
+def scale_and_interpolate_profiles(num_gen, 
+                                   profiles_df=None, 
+                                   target_dispatch_freq=30, 
+                                   original_num_gen=10, 
+                                   original_dispatch_freq=30):
     """
-    Scale data to the range defined by tuple scale_range
+    Linearly scale demand and wind profiles in profiles_df and interpolate 
     """
-    pmax = max(scale_range)
-    pmin = min(scale_range)
-    profile_norm = (profile-np.min(profile))/np.ptp(profile)
-    profile_scaled = profile_norm * (pmax-pmin) + pmin
-    return profile_scaled
+    if profiles_df is None:
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
 
-def process_profile(profile, upsample_factor, scale_range, gen_info):
-    """
-    Use this to scale, upsample and normalise a profile (demand or wind). 
+    # Used for interpolating profiles from 30 min to higher resolutions
+    upsample_factor= int(original_dispatch_freq / target_dispatch_freq)
+
+    profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
+    profiles_df.demand = profiles_df.demand * num_gen/original_num_gen # Linearly scale to number of generators.
+
+    profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
+    profiles_df.wind = profiles_df.wind * num_gen/original_num_gen
     
-    Returns:
-        - profile
-        - profile_norm 
-    """
-    if upsample_factor > 1:
-        profile = interpolate_profile(profile, upsample_factor)
-    if scale_range is not None:
-        profile = scale_profile(profile, scale_range)
-    return profile 
-        
+    return profiles_df
+
 def make_env(mode='train', profiles_df=None, **params):
     """
     Create an environment object.
@@ -735,3 +724,27 @@ def make_env(mode='train', profiles_df=None, **params):
     
     return env
 
+def make_env_from_config(dataset_path, profiles_df=None, mode='train'):
+    import json
+    
+    config_path = os.path.join(dataset_path, 'config.json')
+    config = json.load(open(config_path))
+
+    # Get the gen_info
+    gen_info = pd.DataFrame.from_dict(config['gen_info'])
+    
+    if mode == 'train': 
+        profiles_df = scale_and_interpolate_profiles(num_gen=config['num_gen'], 
+                                                     target_dispatch_freq=config['dispatch_freq_mins'])
+    
+    elif mode == 'test' and profiles_df is None:
+        raise ValueError("Must supply demand and wind profiles for testing")
+        
+    # Create environment object
+    env = Env(gen_info=gen_info, 
+              profiles_df=profiles_df, 
+              mode=mode, 
+              voll=config['voll'], 
+              episode_length_hr = config['episode_length_hrs'],
+              arma_params=config['arma_params'])
+    env.reset()

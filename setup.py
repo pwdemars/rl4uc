@@ -11,7 +11,7 @@ setuptools.setup(
     description="Reinforcement learning environment for the unit commitment problem",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["rl4uc"],
+    packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
