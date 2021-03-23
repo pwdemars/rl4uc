@@ -250,13 +250,11 @@ class Env(object):
         Get the state dictionary. 
         """
         state = {'status': self.status,
-                 'status_capped': self.status_capped,
-                 'status_norm': self.status_norm,
-                 'demand_forecast': self.episode_forecast[self.episode_timestep+1:],
-                 'demand_errors': self.arma_demand.xs/self.max_demand,
-                 'wind_forecast': self.episode_wind_forecast[self.episode_timestep+1:],
-                 'wind_errors': self.arma_wind.xs/self.max_demand,
-                 'timestep_norm':self.episode_timestep/self.episode_length}
+                 'demand_forecast': self.episode_forecast,
+                 'demand_errors': self.arma_demand.xs,
+                 'wind_forecast': self.episode_wind_forecast,
+                 'wind_errors': self.arma_wind.xs,
+                 'timestep':self.episode_timestep}
         self.state = state
         return state
 
@@ -307,9 +305,6 @@ class Env(object):
         
         # Determine whether gens are constrained to remain on/off
         self.determine_constraints()
-        
-        # Cap and normalise status
-        self.cap_and_normalise_status()
 
         # Calculate operating costs
         self.start_cost = self.calculate_start_costs()
@@ -507,21 +502,6 @@ class Env(object):
         
         return fuel_cost, disp
         
-    def cap_and_normalise_status(self):
-        """
-        Transform the environment status by capping at min up/down times, then
-        normalise to between -1 (off and available to turn on) and 1 (on and 
-        available to turn off). 
-        """
-        
-        # Cap state
-        self.status_capped = np.clip(self.status, -self.t_min_down, self.t_min_up)
-        
-        # Normalise
-        x_min = -self.t_min_down
-        x_max = self.t_min_up
-        self.status_norm = 2*(self.status_capped - x_min) / (x_max - x_min) - 1
-        
     def is_feasible(self): 
         """
         Determine whether there is enough capacity to meet nominal demand in 
@@ -611,9 +591,6 @@ class Env(object):
 
         self.commitment = np.where(self.status > 0, 1, 0)
         self.determine_constraints()
-        
-        # Cap and normalise
-        self.cap_and_normalise_status()
         
         # Initialise cost and ENS
         self.expected_cost = 0
