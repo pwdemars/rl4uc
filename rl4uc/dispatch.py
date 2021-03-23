@@ -20,8 +20,8 @@ def lambda_iteration(load, lambda_low, lambda_high, a, b, mins, maxs, epsilon):
     Returns an array of outputs for the generators.
     """    
     num_gen = len(a)
-    lambda_low = np.float(lambda_low)
-    lambda_high = np.float(lambda_high)
+    lambda_low = float(lambda_low)
+    lambda_high = float(lambda_high)
     lambda_mid = 0
     total_output = np.sum(calculate_loads(lambda_high, a, b, mins, maxs, num_gen))
     i = 0 # Counter ensures that this never terminates at the first iteration.
