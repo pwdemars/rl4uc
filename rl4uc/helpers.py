@@ -20,7 +20,7 @@ def process_observation(obs, env, forecast_errors=False):
     wind_norm = obs['wind_forecast']/env.max_demand
     demand_errors_norm = obs['demand_errors']/env.max_demand
     wind_errors_norm = obs['wind_errors']/env.max_demand
-    timestep_norm = (obs['timestep'] + 1)/env.episode_length
+    timestep_norm = (obs['timestep'])/env.episode_length
 
     if forecast_errors:
         processed_obs = np.concatenate((status_norm,
