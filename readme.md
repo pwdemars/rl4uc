@@ -27,7 +27,7 @@ In this RL environment, the economic dispatch problem is solved by the lambda-it
 
 ## Installation
 
-You can install this repository by running:
+You can install the development version of this repository by running:
 
 ```
 git clone https://github.com/pwdemars/rl4uc.git
@@ -35,7 +35,7 @@ cd rl4uc
 pip install .
 ```
 
-Or from PyPI: 
+Or the latest stable release from PyPI: 
 
 ```
 pip install rl4uc
