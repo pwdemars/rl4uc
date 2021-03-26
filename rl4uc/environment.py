@@ -147,8 +147,8 @@ class Env(object):
         self.dispatch_tolerance = 1 # epsilon for lambda iteration.
         
         # Calculate heat rates (the cost per MWh at max output for each generator)
-        self.heat_rates = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
-        self.gen_info['heat_rates'] = self.heat_rates
+        self.min_fuel_cost = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
+        self.gen_info['min_fuel_cost'] = self.min_fuel_cost
 
         # Max cost per mwh
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
@@ -175,9 +175,9 @@ class Env(object):
         x = x * np.logical_not(self.must_off)
         return(np.array(x, dtype=int))
         
-    def get_heat_rates(self, gen_info):  
+    def get_min_fuel_cost(self, gen_info):  
         """
-        Calculate the heat rates ($/MWh) at max output for each generator in gen_info. 
+        Calculate the fuel cost per MWh ($/MWh) at max output for each generator in gen_info. 
         """ 
         num_gen = len(gen_info)
         a = gen_info['a'].to_numpy()
