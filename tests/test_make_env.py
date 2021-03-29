@@ -13,7 +13,6 @@ def test_make_train_env():
 
 def test_make_test_env():
 	df = pd.DataFrame({'demand': np.array([600., 550., 650.,]),
-				  'wind': np.array([10., 50., 70.])})
+				  	   'wind': np.array([10., 50., 70.])})
 	env = make_env(mode='test', profiles_df = df)
 	obs = env.reset()
-
