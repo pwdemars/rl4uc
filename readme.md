@@ -41,7 +41,16 @@ Or the latest stable release from PyPI:
 pip install rl4uc
 ```
 
-## Example usage:
+## Tests
+
+To run the tests:
+
+```
+cd tests
+pytest
+```
+
+## Example usage
 
 Below we will try an action on the 5 generator system. An action is a commitment decision for the following time period, defined by a binary numpy array: 1 indicates that we want to turn (or leave) the generator on, 0 indicates turn or leave it off. 
 
