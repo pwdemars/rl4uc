@@ -158,14 +158,14 @@ class Env(object):
         self.infeasible=False
         self.day_cost = 0 # cost for the entire day 
         
-    def determine_constraints(self):
+    def _determine_constraints(self):
         """
         Determine which generators must be kept on or off for the next time period.
         """
         self.must_on = np.array([True if 0 < self.status[i] < self.t_min_up[i] else False for i in range(self.num_gen)])
         self.must_off = np.array([True if -self.t_min_down[i] < self.status[i] < 0 else False for i in range(self.num_gen)])
         
-    def legalise_action(self, action):
+    def _legalise_action(self, action):
         """
         Convert an action to be legal (remaining the same if it is already legal).
         
@@ -175,19 +175,7 @@ class Env(object):
         x = x * np.logical_not(self.must_off)
         return(np.array(x, dtype=int))
         
-    def get_min_fuel_cost(self, gen_info):  
-        """
-        Calculate the fuel cost per MWh ($/MWh) at max output for each generator in gen_info. 
-        """ 
-        num_gen = len(gen_info)
-        a = gen_info['a'].to_numpy()
-        b = gen_info['b'].to_numpy()
-        c = gen_info['c'].to_numpy()
-        outputs = np.array(gen_info['max_output'][:num_gen])
-        pl = (a*(outputs**2) + b*outputs + c)/outputs
-        return pl
-    
-    def is_legal(self, action):
+    def _is_legal(self, action):
         """
         Check if an action satisfies minimum up/down time constraints
         """
@@ -290,7 +278,7 @@ class Env(object):
 
     def transition(self, action, deterministic, errors):
         # Check if action is legal
-        if self.is_legal(action) is False:
+        if self._is_legal(action) is False:
             print("ILLEGAL")
 
         # Advance demand 
@@ -304,7 +292,7 @@ class Env(object):
         self.update_gen_status(action)
         
         # Determine whether gens are constrained to remain on/off
-        self.determine_constraints()
+        self._determine_constraints()
 
         # Calculate operating costs
         self.start_cost = self.calculate_start_costs()
@@ -590,7 +578,7 @@ class Env(object):
             self.status = self.gen_info['status'].to_numpy()
 
         self.commitment = np.where(self.status > 0, 1, 0)
-        self.determine_constraints()
+        self._determine_constraints()
         
         # Initialise cost and ENS
         self.expected_cost = 0
