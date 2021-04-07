@@ -190,9 +190,8 @@ class Env(object):
             return False
         else:
             return True
-
     
-    def get_net_demand(self, deterministic, errors):
+    def _get_net_demand(self, deterministic, errors):
         """
         Sample demand and wind realisations to get net demand forecast. 
         """
@@ -233,7 +232,7 @@ class Env(object):
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
         return ens_cost
 
-    def get_state(self):
+    def _get_state(self):
         """
         Get the state dictionary. 
         """
@@ -246,7 +245,7 @@ class Env(object):
         self.state = state
         return state
 
-    def get_reward(self):
+    def _get_reward(self):
         """
         Calculate the reward.
         
@@ -276,7 +275,7 @@ class Env(object):
 
         return reward
 
-    def transition(self, action, deterministic, errors):
+    def _transition(self, action, deterministic, errors):
         # Check if action is legal
         if self._is_legal(action) is False:
             print("ILLEGAL")
@@ -285,7 +284,7 @@ class Env(object):
         self.roll_forecasts()
         
         # Sample demand realisation
-        self.net_demand = self.get_net_demand(deterministic, errors)
+        self.net_demand = self._get_net_demand(deterministic, errors)
         
         # Update generator status
         self.commitment = np.array(action)
@@ -295,7 +294,7 @@ class Env(object):
         self._determine_constraints()
 
         # Calculate operating costs
-        self.start_cost = self.calculate_start_costs()
+        self.start_cost = self._calculate_start_costs()
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
@@ -304,7 +303,7 @@ class Env(object):
         self.day_cost += self.start_cost + self.fuel_cost + self.ens_cost
 
         # Assign state
-        state = self.get_state()
+        state = self._get_state()
 
         return state
 
@@ -313,8 +312,8 @@ class Env(object):
         Advance the environment forward 1 timestep, returning an observation, the reward
         and whether the s_{t+1} is terminal. 
         """
-        obs = self.transition(action, deterministic, errors) # Advance the environment, return an observation 
-        reward = self.get_reward() # Evaluate the reward function 
+        obs = self._transition(action, deterministic, errors) # Advance the environment, return an observation 
+        reward = self._get_reward() # Evaluate the reward function 
         done = self.is_terminal() # Determine if state is terminal
 
         return obs, reward, done
@@ -414,7 +413,7 @@ class Env(object):
             
         return disp
 
-    def calculate_fuel_costs(self, output):
+    def _calculate_fuel_costs(self, output):
         """ 
         Calculate total fuel costs for each generator, returning the sum.
 
@@ -425,7 +424,7 @@ class Env(object):
         costs = np.sum(costs)
         return costs
         
-    def calculate_start_costs(self):
+    def _calculate_start_costs(self):
         """
         Calculate start costs
         """
@@ -486,7 +485,7 @@ class Env(object):
         disp = self.economic_dispatch(self.commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = self.calculate_fuel_costs(disp)
+        fuel_cost = self._calculate_fuel_costs(disp)
         
         return fuel_cost, disp
         
@@ -585,7 +584,7 @@ class Env(object):
         self.ens = False
 
         # Assign state
-        state = self.get_state()
+        state = self._get_state()
         
         return state
     
