@@ -419,7 +419,7 @@ class Env(object):
 
         The fuel costs are quadratic: c = ax^2 + bx + c
         """
-        costs = np.multiply(output, np.square(self.a)) + np.multiply(output, self.b) + self.c
+        costs = np.multiply(self.a, np.square(output)) + np.multiply(self.b, output) + self.c
         costs = costs * self.dispatch_resolution # Convert to MWh by multiplying by dispatch resolution in hrs
         costs = np.sum(costs)
         return costs
