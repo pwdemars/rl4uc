@@ -23,7 +23,7 @@ def test_reward_stochastic():
 	env.reset()
 
 	obs, reward, done = env.step(np.ones(5))
-	assert reward == -10036.283880209558
+	assert reward == -10065.650141101181, "reward was: {}".format(reward)
 
 def test_status_update():
 	np.random.seed(1)
@@ -35,7 +35,7 @@ def test_status_update():
 def test_reward_deterministic(example_test_env):
 	example_test_env.reset()
 	obs, reward, done = example_test_env.step(np.ones(example_test_env.num_gen), deterministic=True)
-	assert reward == -8414.46996216112
+	assert reward == -8471.23662554931, "reward was: {}".format(reward)
 
 def test_terminal(example_test_env):
 	example_test_env.reset()

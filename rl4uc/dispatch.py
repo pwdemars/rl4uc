@@ -48,25 +48,3 @@ def calculate_loads(lm, a, b, mins, maxs, num_gen):
     powers = np.where(p < mins, mins, np.where(p > maxs, maxs, p))
     return powers
 
-def calculate_costs(outputs, a, b, c, dispatch_resolution):
-    """Calculate production costs. Quadratic cost curves are of the form 
-    cost = (a^2(x) + b(x) + c)*time_in_hours
-    
-    Args:
-      - outputs: array of generating outputs
-      - a, b, c: arrays of coefficients for quadratic cost curves
-      - n_hours: resolution of settlement periods. 0.5 if half-hourly etc. 
-    
-    Outputs:
-        - cost_list: a list of production costs for each unit. 
-    """
-    num_gen = len(a)
-    cost_list = []
-    for i in range(num_gen):
-        if outputs[i] == 0:
-            cost_list.append(0)
-        else:      
-            cost_unit = dispatch_resolution*(a[i]*(outputs[i]**2) + b[i]*outputs[i] + c[i])
-            cost_list.append(cost_unit)
-    return cost_list
-
