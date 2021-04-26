@@ -537,6 +537,12 @@ class Env(object):
             return (self.episode_timestep == (self.episode_length-1)) or self.ens
         else: 
             return self.episode_timestep == (self.episode_length-1)
+
+    def sample_day(self):
+        """Sample a random day from self.profiles_df"""
+        day = np.random.choice(self.profiles_df.date, 1)
+        day_profile = self.profiles_df[self.profiles_df.date == day.item()]
+        return day, day_profile
     
     def reset(self):
         """
@@ -549,8 +555,7 @@ class Env(object):
         """
         if self.mode == 'train':
             # Choose random day
-            day = np.random.choice(self.profiles_df.date, 1)
-            day_profile = self.profiles_df[self.profiles_df.date == day.item()]
+            day, day_profile = self.sample_day()
             self.day = day
             self.episode_forecast = day_profile.demand.values
             self.episode_wind_forecast = day_profile.wind.values
