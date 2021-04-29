@@ -417,10 +417,11 @@ class Env(object):
         """ 
         Calculate total fuel costs for each generator, returning the sum.
 
-        The fuel costs are quadratic: c = ax^2 + bx + c
+        The fuel costs are quadratic: C = ax^2 + bx + c
         """
         costs = np.multiply(self.a, np.square(output)) + np.multiply(self.b, output) + self.c
         costs = costs * self.dispatch_resolution # Convert to MWh by multiplying by dispatch resolution in hrs
+        costs = costs * self.commitment
         costs = np.sum(costs)
         return costs
         
@@ -634,7 +635,7 @@ def interpolate_profile(profile, upsample_factor):
     Interpolate a demand/renewables profile, upsampling by a factor of 
     upsample_factor
     """
-    if upsample_factor == 1:
+    if upsample_factor == 0:
         return profile
     xp = np.arange(0, profile.size)*upsample_factor
     x = np.arange(xp[-1])
