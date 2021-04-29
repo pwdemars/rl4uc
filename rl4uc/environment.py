@@ -635,7 +635,7 @@ def interpolate_profile(profile, upsample_factor):
     Interpolate a demand/renewables profile, upsampling by a factor of 
     upsample_factor
     """
-    if upsample_factor == 0:
+    if upsample_factor <= 1:
         return profile
     xp = np.arange(0, profile.size)*upsample_factor
     x = np.arange(xp[-1])
