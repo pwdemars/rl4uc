@@ -22,8 +22,8 @@ def test_reward_stochastic():
 	env = make_env(num_gen=5)
 	env.reset()
 
-	obs, reward, done = env.step(np.ones(5))
-	assert reward == -10065.650141101181, "reward was: {}".format(reward)
+	obs, reward, done = env.step(np.array([1,0,0,1,1]))
+	assert reward == -9457.870355350562, "reward was: {}".format(reward)
 
 def test_status_update():
 	np.random.seed(1)
