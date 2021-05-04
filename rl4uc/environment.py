@@ -544,7 +544,7 @@ def interpolate_profile(profile, upsample_factor):
     Interpolate a demand/renewables profile, upsampling by a factor of 
     upsample_factor
     """
-    if upsample_factor <= 1:
+    if upsample_factor == 1:
         return profile
     xp = np.arange(0, profile.size)*upsample_factor
     x = np.arange(xp[-1])
@@ -564,12 +564,12 @@ def scale_and_interpolate_profiles(num_gen,
         profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
 
     # Used for interpolating profiles from 30 min to higher resolutions
-    upsample_factor= int(original_dispatch_freq / target_dispatch_freq)
+    # upsample_factor= int(original_dispatch_freq / target_dispatch_freq)
 
-    profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
+    # profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
     profiles_df.demand = profiles_df.demand * num_gen/original_num_gen # Linearly scale to number of generators.
 
-    profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
+    # profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
     profiles_df.wind = profiles_df.wind * num_gen/original_num_gen
     
     return profiles_df
