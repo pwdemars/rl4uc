@@ -295,7 +295,7 @@ class Env(object):
 
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
-        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand)
+        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -317,57 +317,6 @@ class Env(object):
         done = self.is_terminal() # Determine if state is terminal
 
         return obs, reward, done
-    
-    def sample_reward_new(self, x, z):
-        """
-        Sample a new realisation of demand, with forecast errors following an 
-        ARMA model. 
-
-        Args:
-          - x (float): previous forecast error
-          - z (float): previous white noise
-        """
-        if self.mode=="train":
-            raise ValueError("sample reward is not yet available in training mode")
-        
-        error, z = self.sample_error(x, z)
-        demand_real = self.forecast + error
-        demand_real = np.clip(demand_real, self.min_demand, self.max_demand)     
-        
-        fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
-
-        diff = abs(demand_real - np.sum(disp))
-        ens_amount = diff if diff > self.dispatch_tolerance else 0
-        ens_cost = ens_amount*self.voll*self.dispatch_resolution
-        is_ens = ens_amount > 0
-        
-        operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
-
-        return -operating_cost, is_ens, error, z
-    
-    def sample_reward(self):
-        """
-        Generate a new realisation of demand and calculate reward. 
-        
-        This effectively calculates the reward for a state s' that is indentical to self
-        in all ways except demand realisation. It can therefore be used to estimate 
-        expected reward for a (state, action) pair.
-        """
-        if self.mode == "train":
-            raise ValueError("Sample reward is not yet available in training mode")
-        
-        demand_real = self.sample_demand()
-        
-        fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(demand_real)
-        
-        diff = abs(demand_real - np.sum(disp))
-        ens_amount = diff if diff > self.dispatch_tolerance else 0
-        ens_cost = ens_amount*self.voll*self.dispatch_resolution
-        is_ens = ens_amount > 0
-        
-        operating_cost = fuel_cost + ens_cost + self.start_cost # Note start cost is invariant with demand
-        
-        return -operating_cost, is_ens
         
     def update_gen_status(self, action):
         """Subroutine updating generator statuses.""" 
@@ -413,7 +362,7 @@ class Env(object):
             
         return disp
 
-    def _calculate_fuel_costs(self, output):
+    def _calculate_fuel_costs(self, output, commitment):
         """ 
         Calculate total fuel costs for each generator, returning the sum.
 
@@ -421,7 +370,7 @@ class Env(object):
         """
         costs = np.multiply(self.a, np.square(output)) + np.multiply(self.b, output) + self.c
         costs = costs * self.dispatch_resolution # Convert to MWh by multiplying by dispatch resolution in hrs
-        costs = costs * self.commitment
+        costs = costs * commitment
         costs = np.sum(costs)
         return costs
         
@@ -433,48 +382,8 @@ class Env(object):
         idx = np.where(self.status == 1)[0]
         start_cost = np.sum(self.hot_cost[idx]) # only hot costs
         return start_cost
-
-    def calculate_expected_costs(self, action):
-        """
-        If self.scale == 0 (meaning there is no error in demand forecast) then
-        calculate costs for the nominal demand.
         
-        Otherwise calculate expected costs with 5 samples: at point forecast,
-        and ±1,2 sigma from the forecast.
-        
-        Costs are calculated using a weighted average of these 5 values: 68.2% 
-        for the point forecast, 13.6% for ±sigma, 2.3% for ±2sigma. 
-        """
-        
-        if self.scale == 0:
-            return self.calculate_nominal_costs(action)
-        
-        else: 
-            # Weights for sum (based on normal distribution CDF)
-            sigmas = [0.023, 0.136, 0.682, 0.136, 0.023]
-            
-            a = np.tile(self.forecast, 5)
-            b = np.array([self.forecast*self.scale*i for i in range(-2,3)])
-            demands = a+b
-            
-        average_cost = 0
-        average_ens_cost = 0
-        
-        for i, d in enumerate(demands):
-            fuel_cost, disp = self.calculate_fuel_cost_and_dispatch(action)
-            
-            # Energy-not-served costs
-            diff = abs(d - sum(disp))
-            ens = diff if diff > self.dispatch_tolerance else 0
-            ens_cost = ens*self.voll*self.dispatch_resolution
-
-            average_cost += sigmas[i]*(fuel_cost + ens_cost)
-            average_ens_cost += sigmas[i]*ens_cost
-        
-        self.expected_cost = average_cost + self.start_cost
-        self.ens = True if average_ens_cost > 0 else False
-        
-    def calculate_fuel_cost_and_dispatch(self, demand):
+    def calculate_fuel_cost_and_dispatch(self, demand, commitment):
         """
         Calculate the economic dispatch to meet demand.
         
@@ -483,10 +392,10 @@ class Env(object):
             - dispatch (array): power output for each generator
         """
         # Get economic dispatcb
-        disp = self.economic_dispatch(self.commitment, demand, 0, 100)
+        disp = self.economic_dispatch(commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = self._calculate_fuel_costs(disp)
+        fuel_cost = self._calculate_fuel_costs(disp, commitment)
         
         return fuel_cost, disp
         
