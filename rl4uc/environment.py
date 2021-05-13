@@ -152,6 +152,10 @@ class Env(object):
 
         # Max cost per mwh
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
+
+        # Carbon emissions data 
+        self.kgco2_per_mwh = None
+        self.usd_per_kgco2 = None
         
         self.forecast = None
         self.start_cost = 0
@@ -183,10 +187,10 @@ class Env(object):
         illegal_on = np.any(action[self.must_on] == 0)
         illegal_off = np.any(action[self.must_off] == 1)
         if any([illegal_on, illegal_off]):
-            print("Illegal action")
-            print("Action: {}".format(action))
-            print("Must on: {}".format(self.must_on))
-            print("Must off: {}".format(self.must_off))
+            # print("Illegal action")
+            # print("Action: {}".format(action))
+            # print("Must on: {}".format(self.must_on))
+            # print("Must off: {}".format(self.must_off))
             return False
         else:
             return True
@@ -251,25 +255,8 @@ class Env(object):
         
         The reward function may differ between training and test modes. 
         """
-        if self.mode == 'train':
-            operating_cost = self.fuel_cost + self.ens_cost + self.startup_multiplier*self.start_cost # Apply startup multiplier in training only
-
-            # # Spare capacity penalty:
-            # reserve_margin = np.dot(self.commitment, self.max_output)/(self.forecast - self.wind_forecast) - 1
-            # excess_capacity_penalty = self.excess_capacity_penalty_factor * np.square(max(0,reserve_margin))
-
-            # Reward function that is same as test version: 
-            reward = -operating_cost
-
-            # DAILY REWARD FUNCTION
-            # if self.is_terminal():
-            #     reward = -self.day_cost
-            # else:
-            #     reward = 0
-
-        else: 
-            operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
-            reward = -operating_cost
+        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
+        reward = -operating_cost
 
         self.reward=reward
 
@@ -278,7 +265,8 @@ class Env(object):
     def _transition(self, action, deterministic, errors):
         # Check if action is legal
         if self._is_legal(action) is False:
-            print("ILLEGAL")
+            pass
+            # print("ILLEGAL")
 
         # Advance demand 
         self.roll_forecasts()
