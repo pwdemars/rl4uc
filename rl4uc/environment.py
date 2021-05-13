@@ -250,11 +250,7 @@ class Env(object):
         return state
 
     def _get_reward(self):
-        """
-        Calculate the reward.
-        
-        The reward function may differ between training and test modes. 
-        """
+        """Calculate the reward (negative operating cost)"""
         operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
         reward = -operating_cost
 
