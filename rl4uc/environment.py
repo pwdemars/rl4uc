@@ -593,31 +593,6 @@ def make_env(mode='train', profiles_df=None, **params):
     
     return env
 
-def make_env_from_config(dataset_path, profiles_df=None, mode='train'):
-    import json
-    
-    config_path = os.path.join(dataset_path, 'config.json')
-    config = json.load(open(config_path))
-
-    # Get the gen_info
-    gen_info = pd.DataFrame.from_dict(config['gen_info'])
-    
-    if mode == 'train': 
-        profiles_df = scale_and_interpolate_profiles(num_gen=config['num_gen'], 
-                                                     target_dispatch_freq=config['dispatch_freq_mins'])
-    
-    elif mode == 'test' and profiles_df is None:
-        raise ValueError("Must supply demand and wind profiles for testing")
-        
-    # Create environment object
-    env = Env(gen_info=gen_info, 
-              profiles_df=profiles_df, 
-              mode=mode, 
-              voll=config['voll'], 
-              episode_length_hr = config['episode_length_hrs'],
-              arma_params=config['arma_params'])
-    env.reset()
-
 def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
     """
     Create an environment object.
