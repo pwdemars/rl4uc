@@ -154,8 +154,8 @@ class Env(object):
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
 
         # Carbon emissions data 
-        self.kgco2_per_mwh = None
-        self.usd_per_kgco2 = None
+        self.kgco2_per_mwh = 46. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
+        self.usd_per_kgco2 = kwargs.get('usd_per_kgco2', 0.) # $20 per tonne 
         
         self.forecast = None
         self.start_cost = 0
@@ -251,7 +251,7 @@ class Env(object):
 
     def _get_reward(self):
         """Calculate the reward (negative operating cost)"""
-        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
+        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost + self.carbon_cost
         reward = -operating_cost
 
         self.reward=reward
@@ -280,6 +280,7 @@ class Env(object):
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
+        self.carbon_cost = self._calculate_carbon_cost(self.disp)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -382,6 +383,10 @@ class Env(object):
         fuel_cost = self._calculate_fuel_costs(disp, commitment)
         
         return fuel_cost, disp
+
+    def _calculate_carbon_cost(self, disp):
+        carbon_cost = self.kgco2_per_mwh * self.usd_per_kgco2 * np.sum(disp) * self.dispatch_resolution
+        return carbon_cost
         
     def is_feasible(self): 
         """
