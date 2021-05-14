@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd 
 import os
+import json
 
 from .dispatch import lambda_iteration
 
@@ -155,7 +156,7 @@ class Env(object):
 
         # Carbon emissions data 
         self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
-        self.usd_per_kgco2 = kwargs.get('usd_per_kgco2', 0.) # $20 per tonne 
+        self.usd_per_kgco2 = float(kwargs.get('usd_per_kgco2', 0.)) # $20 per tonne 
         
         self.forecast = None
         self.start_cost = 0
@@ -616,3 +617,35 @@ def make_env_from_config(dataset_path, profiles_df=None, mode='train'):
               episode_length_hr = config['episode_length_hrs'],
               arma_params=config['arma_params'])
     env.reset()
+
+def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
+    """
+    Create an environment object.
+    """
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    env_fn = os.path.join(script_dir, 'data/envs/{}.json'.format(env_name))
+    params = json.load(open(env_fn))
+
+    gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
+                               params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    if mode == 'train':
+        if profiles_df is None:
+            profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
+
+        # Used for interpolating profiles from 30 min to higher resolutions
+        upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
+    
+        profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
+        profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
+    
+        profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
+        profiles_df.wind = profiles_df.wind * len(gen_info)/10
+    
+    if mode == 'test' and profiles_df is None:
+        raise ValueError("Must supply demand and wind profiles for testing")
+
+    # Create environment object
+    env = Env(gen_info=gen_info, profiles_df=profiles_df, mode=mode, **params)
+    env.reset()
+    
+    return env
