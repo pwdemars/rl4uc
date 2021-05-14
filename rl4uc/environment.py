@@ -154,7 +154,7 @@ class Env(object):
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
 
         # Carbon emissions data 
-        self.kgco2_per_mwh = 46. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
+        self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
         self.usd_per_kgco2 = kwargs.get('usd_per_kgco2', 0.) # $20 per tonne 
         
         self.forecast = None
