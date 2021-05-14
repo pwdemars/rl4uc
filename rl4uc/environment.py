@@ -260,10 +260,9 @@ class Env(object):
         return reward
 
     def _transition(self, action, deterministic, errors):
-        # Check if action is legal
+        # Check if action is legal and legalise if necessary
         if self._is_legal(action) is False:
-            pass
-            # print("ILLEGAL")
+            action = self._legalise_action(action)
 
         # Advance demand 
         self.roll_forecasts()
@@ -574,14 +573,8 @@ def make_env(mode='train', profiles_df=None, **params):
     if mode == 'train':
         if profiles_df is None:
             profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
-
-        # Used for interpolating profiles from 30 min to higher resolutions
-        upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
     
-        profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
-        profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
-    
-        profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
+        profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.    
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
     if mode == 'test' and profiles_df is None:
@@ -606,14 +599,8 @@ def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
     if mode == 'train':
         if profiles_df is None:
             profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
-
-        # Used for interpolating profiles from 30 min to higher resolutions
-        upsample_factor= int(30/params.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS))
     
-        profiles_df.demand = interpolate_profile(profiles_df.demand, upsample_factor)
         profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.
-    
-        profiles_df.wind = interpolate_profile(profiles_df.wind, upsample_factor)
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
     if mode == 'test' and profiles_df is None:
