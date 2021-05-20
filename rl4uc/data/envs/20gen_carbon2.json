@@ -1,6 +1,6 @@
 {"num_gen": 20,
  "dispatch_freq_mins": 30,
- "usd_per_kgco2": 0.04,
+ "usd_per_kgco2": 0.1,
  "arma_params":{
 	"alphas_demand": [
 		0.63004456,
