@@ -280,7 +280,7 @@ class Env(object):
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
-        self.carbon_cost = self._calculate_carbon_cost(self.disp)
+        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self.disp)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -385,8 +385,9 @@ class Env(object):
         return fuel_cost, disp
 
     def _calculate_carbon_cost(self, disp):
-        carbon_cost = self.kgco2_per_mwh * self.usd_per_kgco2 * np.sum(disp) * self.dispatch_resolution
-        return carbon_cost
+        kgco2 = self.kgco2_per_mwh * np.sum(disp) * self.dispatch_resolution
+        carbon_cost = self.usd_per_kgco2 * kgco2
+        return carbon_cost, kgco2
         
     def is_feasible(self): 
         """
