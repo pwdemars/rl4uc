@@ -162,7 +162,7 @@ class Env(object):
         self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
                            self.num_gen *
                            self.dispatch_resolution * 
-                           self.usd_per_kgco2 * 20) 
+                           (1 + self.usd_per_kgco2 * 10)) 
 
         
     def _determine_constraints(self):
