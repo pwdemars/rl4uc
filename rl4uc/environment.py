@@ -92,11 +92,6 @@ class Env(object):
         else:
             self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
             self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
-            
-        # Min reward is a function of number of generators and episode length
-        self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
-                           self.num_gen *
-                           self.dispatch_resolution) 
 
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
@@ -162,6 +157,13 @@ class Env(object):
         self.start_cost = 0
         self.infeasible=False
         self.day_cost = 0 # cost for the entire day 
+
+        # Min reward is a function of number of generators and episode length
+        self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
+                           self.num_gen *
+                           self.dispatch_resolution * 
+                           self.usd_per_kgco2 * 20) 
+
         
     def _determine_constraints(self):
         """
