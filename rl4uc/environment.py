@@ -151,7 +151,7 @@ class Env(object):
 
         # Carbon emissions data 
         self.kgco2_per_mmbtu_gas = 53. # Estimate from: https://www.eia.gov/environment/emissions/co2_vol_mass.php
-        self.usd_per_mmbtu_gas = 2.5 # Approximate average for late 1990s (using fuel cost curves from Kazarlis 1996)
+        self.usd_per_mmbtu_gas = 3. # Approximate average for late 1990s (using fuel cost curves from Kazarlis 1996)
         # self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
         self.usd_per_kgco2 = float(kwargs.get('usd_per_kgco2', 0.)) # $20 per tonne 
         
