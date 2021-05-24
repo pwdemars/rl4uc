@@ -52,4 +52,4 @@ def test_carbon_cost():
 	env = make_env(usd_per_kgco2=0.1)
 	env.reset()
 	obs, reward, done = env.step(np.ones(5))
-	assert env.carbon_cost == 9211.064174965413, "carbon cost was: {}".format(env.carbon_cost)
+	assert np.isclose(env.carbon_cost == 9211.064174965413), "carbon cost was: {}".format(env.carbon_cost)
