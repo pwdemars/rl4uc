@@ -150,7 +150,9 @@ class Env(object):
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
 
         # Carbon emissions data 
-        self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
+        self.kgco2_per_mmbtu_gas = 53. # Estimate from: https://www.eia.gov/environment/emissions/co2_vol_mass.php
+        self.usd_per_mmbtu_gas = 2.5 # Approximate average for late 1990s (using fuel cost curves from Kazarlis 1996)
+        # self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
         self.usd_per_kgco2 = float(kwargs.get('usd_per_kgco2', 0.)) # $20 per tonne 
         
         self.forecast = None
@@ -162,7 +164,7 @@ class Env(object):
         self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
                            self.num_gen *
                            self.dispatch_resolution * 
-                           (1 + self.usd_per_kgco2 * 10)) 
+                           (1 + self.usd_per_kgco2 * 20)) 
 
         
     def _determine_constraints(self):
@@ -282,7 +284,7 @@ class Env(object):
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
         self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
-        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self.disp)
+        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self.fuel_cost)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -386,8 +388,9 @@ class Env(object):
         
         return fuel_cost, disp
 
-    def _calculate_carbon_cost(self, disp):
-        kgco2 = self.kgco2_per_mwh * np.sum(disp) * self.dispatch_resolution
+    def _calculate_carbon_cost(self, fuel_cost_usd):
+        kgco2 = (self.kgco2_per_mmbtu_gas / self.usd_per_mmbtu_gas) * fuel_cost_usd
+        # kgco2 = self.kgco2_per_mwh * np.sum(disp) * self.dispatch_resolution
         carbon_cost = self.usd_per_kgco2 * kgco2
         return carbon_cost, kgco2
         
