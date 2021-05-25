@@ -141,10 +141,6 @@ class Env(object):
         self.forecast_length = kwargs.get('forecast_length', max(self.t_min_down))
         
         self.dispatch_tolerance = 1 # epsilon for lambda iteration.
-        
-        # Calculate heat rates (the cost per MWh at max output for each generator)
-        self.min_fuel_cost = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
-        self.gen_info['min_fuel_cost'] = self.min_fuel_cost
 
         # Max cost per mwh
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
@@ -166,6 +162,10 @@ class Env(object):
                            self.dispatch_resolution * 
                            (1 + self.usd_per_kgco2 * 20)) 
 
+        # Calculate minimum operating cost per MWh
+        max_fuel_costs = self._calculate_fuel_costs(self.max_output, np.ones(self.num_gen))
+        max_carbon_costs = (self.gen_info.kgco2_per_mmbtu.values / self.gen_info.usd_per_mmbtu) * max_fuel_costs * self.usd_per_kgco2
+        self.gen_info['min_fuel_cost'] = (max_carbon_costs + max_fuel_costs) / (self.max_output * self.dispatch_resolution)
         
     def _determine_constraints(self):
         """
@@ -283,8 +283,9 @@ class Env(object):
 
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
-        self.fuel_cost, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
-        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self._generator_fuel_costs(self.disp, action))
+        self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
+        self.fuel_cost = np.sum(self.fuel_costs)
+        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self.fuel_costs)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -364,7 +365,7 @@ class Env(object):
         The fuel costs are quadratic: C = ax^2 + bx + c
         """
         costs = self._generator_fuel_costs(output, commitment)
-        costs = np.sum(costs)
+        # costs = np.sum(costs)
         return costs
         
     def _calculate_start_costs(self):
@@ -388,9 +389,9 @@ class Env(object):
         disp = self.economic_dispatch(commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
-        fuel_cost = self._calculate_fuel_costs(disp, commitment)
+        fuel_costs = self._calculate_fuel_costs(disp, commitment)
         
-        return fuel_cost, disp
+        return fuel_costs, disp
 
     def _calculate_carbon_cost(self, fuel_costs):
         kgco2 = np.sum((self.gen_info.kgco2_per_mmbtu.values / 
