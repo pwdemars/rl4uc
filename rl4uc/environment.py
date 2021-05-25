@@ -67,6 +67,11 @@ class NStepARMA(object):
         self.xs = np.zeros(self.p)
         self.zs = np.zeros(self.q)
 
+def update_cost_coefs(gen_info, usd_per_kgco2):
+    factor = (gen_info.kgco2_per_mmbtu / gen_info.usd_per_mmbtu) * usd_per_kgco2
+    gen_info.a *= (1 + factor)
+    gen_info.b *= (1 + factor)
+    gen_info.c *= (1 + factor)
 
 class Env(object):
     """
@@ -107,6 +112,8 @@ class Env(object):
                                    betas=arma_params['betas_wind'],
                                    sigma=arma_params['sigma_wind'],
                                    name='wind')
+
+        update_cost_coefs(self.gen_info, float(kwargs.get('usd_per_kgco2', 0.)))
         
         # Penalty factor for committing excess capacity, usedi n training reward function 
 #         self.excess_capacity_penalty_factor = (self.num_gen * 
@@ -162,10 +169,9 @@ class Env(object):
                            self.dispatch_resolution * 
                            (1 + self.usd_per_kgco2 * 20)) 
 
-        # Calculate minimum operating cost per MWh
-        max_fuel_costs = self._calculate_fuel_costs(self.max_output, np.ones(self.num_gen))
-        max_carbon_costs = (self.gen_info.kgco2_per_mmbtu.values / self.gen_info.usd_per_mmbtu) * max_fuel_costs * self.usd_per_kgco2
-        self.gen_info['min_fuel_cost'] = (max_carbon_costs + max_fuel_costs) / (self.max_output * self.dispatch_resolution)
+        # Calculate minimum fuel cost per MWh
+        self.min_fuel_cost = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
+        self.gen_info['min_fuel_cost'] = self.min_fuel_cost
         
     def _determine_constraints(self):
         """
@@ -256,7 +262,7 @@ class Env(object):
 
     def _get_reward(self):
         """Calculate the reward (negative operating cost)"""
-        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost + self.carbon_cost
+        operating_cost = self.fuel_cost + self.ens_cost + self.start_cost
         reward = -operating_cost
 
         self.reward=reward
@@ -285,7 +291,7 @@ class Env(object):
         self.start_cost = self._calculate_start_costs()
         self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
         self.fuel_cost = np.sum(self.fuel_costs)
-        self.carbon_cost, self.kgco2 = self._calculate_carbon_cost(self.fuel_costs)
+        self.kgco2 = self._calculate_kgco2(self.fuel_costs)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -393,14 +399,14 @@ class Env(object):
         
         return fuel_costs, disp
 
-    def _calculate_carbon_cost(self, fuel_costs):
+    def _calculate_kgco2(self, fuel_costs):
         kgco2 = np.sum((self.gen_info.kgco2_per_mmbtu.values / 
                         self.gen_info.usd_per_mmbtu) * fuel_costs)
 
         # kgco2 = (self.kgco2_per_mmbtu_gas / self.usd_per_mmbtu_gas) * fuel_cost_usd
         # kgco2 = self.kgco2_per_mwh * np.sum(disp) * self.dispatch_resolution
-        carbon_cost = self.usd_per_kgco2 * kgco2
-        return carbon_cost, kgco2
+        # carbon_cost = self.usd_per_kgco2 * kgco2
+        return kgco2
         
     def is_feasible(self): 
         """

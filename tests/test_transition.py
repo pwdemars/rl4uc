@@ -48,8 +48,8 @@ def test_ens(example_test_env):
 	example_test_env.step(np.zeros(5))
 	assert example_test_env.ens
 
-def test_carbon_cost():
+def test_kgco2():
 	env = make_env(usd_per_kgco2=0.1)
 	env.reset()
 	obs, reward, done = env.step(np.ones(5))
-	assert np.isclose(env.carbon_cost, 14012.776128632971), "carbon cost was: {}".format(env.carbon_cost)
+	assert np.isclose(env.kgco2, 426004.5177544347), "kgco2 was: {}".format(env.kgco2)
