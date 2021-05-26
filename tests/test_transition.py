@@ -51,5 +51,5 @@ def test_ens(example_test_env):
 def test_kgco2():
 	env = make_env(usd_per_kgco2=0.1)
 	env.reset()
-	obs, reward, done = env.step(np.ones(5))
-	assert np.isclose(env.kgco2, 426004.5177544347), "kgco2 was: {}".format(env.kgco2)
+	obs, reward, done = env.step(np.ones(env.num_gen))
+	assert np.isclose(env.kgco2, 122983.8132575362), "kgco2 was: {}".format(env.kgco2)

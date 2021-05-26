@@ -140,6 +140,7 @@ class Env(object):
         self.hot_cost = self.gen_info['hot_cost'].to_numpy()
         self.cold_cost = self.gen_info['cold_cost'].to_numpy()
         self.cold_hrs = self.gen_info['cold_hrs'].to_numpy()
+        self.mmbtu_per_mwh = 3.412
         
         # Min and max demand for clipping demand profiles
         self.min_demand = np.max(self.min_output)
@@ -153,9 +154,6 @@ class Env(object):
         self.gen_info['max_cost_per_mwh'] = (self.a*(self.min_output**2) + self.b*self.min_output + self.c)/self.min_output
 
         # Carbon emissions data 
-        self.kgco2_per_mmbtu_gas = 53. # Estimate from: https://www.eia.gov/environment/emissions/co2_vol_mass.php
-        self.usd_per_mmbtu_gas = 3. # Approximate average for late 1990s (using fuel cost curves from Kazarlis 1996)
-        # self.kgco2_per_mwh = 469. # Emissions factor of final energy (MWh_e) (IPCC 2011 estimate)
         self.usd_per_kgco2 = float(kwargs.get('usd_per_kgco2', 0.)) # $20 per tonne 
         
         self.forecast = None
@@ -291,7 +289,7 @@ class Env(object):
         self.start_cost = self._calculate_start_costs()
         self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
         self.fuel_cost = np.sum(self.fuel_costs)
-        self.kgco2 = self._calculate_kgco2(self.fuel_costs)
+        self.kgco2 = self._calculate_kgco2(self.fuel_costs, self.disp)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
@@ -388,10 +386,10 @@ class Env(object):
         Calculate the economic dispatch to meet demand.
         
         Returns:
-            - fuel_cost (float)
+            - fuel_costs (array)
             - dispatch (array): power output for each generator
         """
-        # Get economic dispatcb
+        # Get economic dispatch
         disp = self.economic_dispatch(commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
@@ -399,14 +397,14 @@ class Env(object):
         
         return fuel_costs, disp
 
-    def _calculate_kgco2(self, fuel_costs):
-        kgco2 = np.sum((self.gen_info.kgco2_per_mmbtu.values / 
-                        self.gen_info.usd_per_mmbtu) * fuel_costs)
 
-        # kgco2 = (self.kgco2_per_mmbtu_gas / self.usd_per_mmbtu_gas) * fuel_cost_usd
-        # kgco2 = self.kgco2_per_mwh * np.sum(disp) * self.dispatch_resolution
-        # carbon_cost = self.usd_per_kgco2 * kgco2
-        return kgco2
+    def _calculate_kgco2(self, fuel_costs, disp):
+        e_out_mmbtu = disp * self.dispatch_resolution * self.mmbtu_per_mwh
+        usd_per_mmbtu_out = np.divide(fuel_costs, e_out_mmbtu, where=fuel_costs!=0)
+        efficiency = (usd_per_mmbtu_out / 
+                      (self.gen_info.usd_per_mmbtu + self.usd_per_kgco2 * self.gen_info.kgco2_per_mmbtu))
+        kgco2 = e_out_mmbtu * efficiency * self.gen_info.kgco2_per_mmbtu
+        return np.sum(kgco2)
         
     def is_feasible(self): 
         """
