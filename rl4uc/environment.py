@@ -172,6 +172,7 @@ class Env(object):
         self.gen_info['min_fuel_cost'] = self.min_fuel_cost
 
         # Set up for outages
+        self.outages = kwargs.get('outages', False)
         if kwargs.get('outages', False):
             self.outage_rate = self.gen_info['outage_rate'].to_numpy()
         else:
@@ -196,7 +197,7 @@ class Env(object):
         """
         self.must_on = np.array([True if 0 < self.status[i] < self.t_min_up[i] else False for i in range(self.num_gen)])
         self.must_off = np.array([True if -self.t_min_down[i] < self.status[i] < 0 else False for i in range(self.num_gen)])
-        self.must_off = np.logical_or(self.must_off, np.logical_not(self.availability)) # if outage then must be off
+        # self.must_off = np.logical_or(self.must_off, np.logical_not(self.availability)) # if outage then must be off
         
     def _legalise_action(self, action):
         """
@@ -311,7 +312,7 @@ class Env(object):
 
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
-        self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action)
+        self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action, self.availability)
         self.fuel_cost = np.sum(self.fuel_costs)
         self.kgco2 = self._calculate_kgco2(self.fuel_costs, self.disp)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
@@ -393,7 +394,6 @@ class Env(object):
         The fuel costs are quadratic: C = ax^2 + bx + c
         """
         costs = self._generator_fuel_costs(output, commitment)
-        # costs = np.sum(costs)
         return costs
         
     def _calculate_start_costs(self):
@@ -405,7 +405,7 @@ class Env(object):
         start_cost = np.sum(self.hot_cost[idx]) # only hot costs
         return start_cost
         
-    def calculate_fuel_cost_and_dispatch(self, demand, commitment):
+    def calculate_fuel_cost_and_dispatch(self, demand, commitment, availability=None):
         """
         Calculate the economic dispatch to meet demand.
         
@@ -414,6 +414,8 @@ class Env(object):
             - dispatch (array): power output for each generator
         """
         # Get economic dispatch
+        if availability is not None:
+            commitment = commitment * availability
         disp = self.economic_dispatch(commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
