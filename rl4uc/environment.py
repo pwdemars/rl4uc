@@ -170,6 +170,25 @@ class Env(object):
         # Calculate minimum fuel cost per MWh
         self.min_fuel_cost = (self.a*(self.max_output**2) + self.b*self.max_output + self.c)/self.max_output
         self.gen_info['min_fuel_cost'] = self.min_fuel_cost
+
+        # Set up for outages
+        if kwargs.get('outages', False):
+            self.outage_rate = self.gen_info['outage_rate'].to_numpy()
+        else:
+            self.outage_rate = np.zeros(self.num_gen)
+        self._reset_availability()
+
+    def _reset_availability(self):
+        self.availability = np.ones(self.num_gen)
+
+    def _update_availability(self, outage):
+        self.availability -= outage
+        self.availability = np.clip(self.availability, 0, 1)
+
+    def _sample_outage(self):
+        outage = np.random.binomial(1, self.outage_rate)
+        outage = outage * self.commitment # outages are only possible when generator is already on
+        return outage
         
     def _determine_constraints(self):
         """
@@ -177,6 +196,7 @@ class Env(object):
         """
         self.must_on = np.array([True if 0 < self.status[i] < self.t_min_up[i] else False for i in range(self.num_gen)])
         self.must_off = np.array([True if -self.t_min_down[i] < self.status[i] < 0 else False for i in range(self.num_gen)])
+        self.must_off = np.logical_or(self.must_off, np.logical_not(self.availability)) # if outage then must be off
         
     def _legalise_action(self, action):
         """
@@ -277,10 +297,14 @@ class Env(object):
         
         # Sample demand realisation
         self.net_demand = self._get_net_demand(deterministic, errors)
+
+        # Sample outages
+        outage = self._sample_outage()
+        self._update_availability(outage)
         
         # Update generator status
         self.commitment = np.array(action)
-        self.update_gen_status(action)
+        self.update_gen_status(self.commitment)
         
         # Determine whether gens are constrained to remain on/off
         self._determine_constraints()
@@ -507,6 +531,8 @@ class Env(object):
 
         # Assign state
         state = self._get_state()
+
+        self._reset_availability()
         
         return state
     
