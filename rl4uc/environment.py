@@ -249,6 +249,7 @@ class Env(object):
         self.wind_real = wind_real
 
         net_demand = demand_real - wind_real
+        # max_demand = np.dot(self.max_output, self.availability) # demand cannot exceed capacity of *available* generators
         net_demand = np.clip(net_demand, self.min_demand, self.max_demand)
         return net_demand
 
@@ -260,7 +261,11 @@ class Env(object):
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
-    def calculate_lost_load_cost(self, net_demand, disp):
+    def calculate_lost_load_cost(self, net_demand, disp, availability):
+
+        if self.outages and (availability is not None):
+            net_demand = np.minimum(np.dot(availability, self.max_output), net_demand)
+
         diff = abs(net_demand - np.sum(disp))
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
@@ -316,7 +321,7 @@ class Env(object):
         self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action, self.availability)
         self.fuel_cost = np.sum(self.fuel_costs)
         self.kgco2 = self._calculate_kgco2(self.fuel_costs, self.disp)
-        self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp)
+        self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp, self.availability)
         self.ens = True if self.ens_cost > 0 else False # Note that this will not mark ENS if VOLL is 0. 
 
         # Accumulate the total cost for the day
@@ -414,9 +419,13 @@ class Env(object):
             - fuel_costs (array)
             - dispatch (array): power output for each generator
         """
-        # Get economic dispatch
-        if availability is not None:
+        # If using outages, then demand should be capped at availabile generation
+        # and commitment should be limited by availability 
+        if self.outages and (availability is not None):
+            demand = np.minimum(np.dot(availability, self.max_output), demand)
             commitment = commitment * availability
+
+        # Get availability
         disp = self.economic_dispatch(commitment, demand, 0, 100)
         
         # Calculate fuel costs costs
