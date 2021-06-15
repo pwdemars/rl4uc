@@ -261,7 +261,7 @@ class Env(object):
         self.forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
-    def calculate_lost_load_cost(self, net_demand, disp, availability):
+    def calculate_lost_load_cost(self, net_demand, disp, availability=None):
 
         if self.outages and (availability is not None):
             net_demand = np.minimum(np.dot(availability, self.max_output), net_demand)
