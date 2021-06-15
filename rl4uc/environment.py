@@ -300,9 +300,10 @@ class Env(object):
         self.net_demand = self._get_net_demand(deterministic, errors)
 
         # Sample outages
-        outage = self._sample_outage()
-        self._update_availability(outage)
-        
+        if self.outages:
+            outage = self._sample_outage()
+            self._update_availability(outage)
+            
         # Update generator status
         self.commitment = np.array(action)
         self.update_gen_status(self.commitment)
