@@ -305,7 +305,7 @@ class Env(object):
         self.net_demand = self._get_net_demand(deterministic, errors)
 
         # Sample outages
-        if self.outages:
+        if self.outages and (not deterministic):
             outage = self._sample_outage()
             self._update_availability(outage)
             
