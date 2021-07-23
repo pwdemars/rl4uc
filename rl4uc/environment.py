@@ -248,9 +248,13 @@ class Env(object):
         wind_real = max(0, wind_real)
         self.wind_real = wind_real
 
+        if self.outages:
+            max_demand = np.dot(self.max_output, self.availability)
+        else:
+            max_demand = self.max_demand
+
         net_demand = demand_real - wind_real
-        # max_demand = np.dot(self.max_output, self.availability) # demand cannot exceed capacity of *available* generators
-        net_demand = np.clip(net_demand, self.min_demand, self.max_demand)
+        net_demand = np.clip(net_demand, self.min_demand, max_demand)
         return net_demand
 
     def roll_forecasts(self):
