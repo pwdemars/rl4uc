@@ -181,6 +181,7 @@ class Env(object):
 
         # Set up for curtailment
         self.curtailment = kwargs.get('curtailment', False)
+        self.action_size = self.num_gen + int(self.curtailment)
 
     def _reset_availability(self):
         self.availability = np.ones(self.num_gen)
