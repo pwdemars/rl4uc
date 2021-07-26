@@ -179,6 +179,9 @@ class Env(object):
             self.outage_rate = np.zeros(self.num_gen)
         self._reset_availability()
 
+        # Set up for curtailment
+        self.curtailment = kwargs.get('curtailment', False)
+
     def _reset_availability(self):
         self.availability = np.ones(self.num_gen)
 
@@ -225,7 +228,7 @@ class Env(object):
         else:
             return True
     
-    def _get_net_demand(self, deterministic, errors):
+    def _get_net_demand(self, deterministic, errors, curtail=False):
         """
         Sample demand and wind realisations to get net demand forecast. 
         """
@@ -253,7 +256,10 @@ class Env(object):
         else:
             max_demand = self.max_demand
 
-        net_demand = demand_real - wind_real
+        if curtail:
+            net_demand = demand_real
+        else: 
+            net_demand = demand_real - wind_real
         net_demand = np.clip(net_demand, self.min_demand, max_demand)
         return net_demand
 
@@ -298,6 +304,14 @@ class Env(object):
         return reward
 
     def _transition(self, action, deterministic, errors):
+
+        # Get curtailment action (if using)
+        if self.curtailment:
+            curtail = bool(action[-1]) # last action 
+            action = np.delete(action, -1)
+        else:
+            curtail = False
+
         # Check if action is legal and legalise if necessary
         if self._is_legal(action) is False:
             action = self._legalise_action(action)
@@ -306,7 +320,7 @@ class Env(object):
         self.roll_forecasts()
         
         # Sample demand realisation
-        self.net_demand = self._get_net_demand(deterministic, errors)
+        self.net_demand = self._get_net_demand(deterministic, errors, curtail)
 
         # Sample outages
         if self.outages and (not deterministic):
