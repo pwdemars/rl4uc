@@ -175,6 +175,7 @@ class Env(object):
         self.outages = kwargs.get('outages', False)
         if kwargs.get('outages', False):
             self.outage_rate = self.gen_info['outage_rate'].to_numpy()
+            self.max_outages = int(self.num_gen)/10
         else:
             self.outage_rate = np.zeros(self.num_gen)
         self._reset_availability()
@@ -324,7 +325,9 @@ class Env(object):
         self.net_demand = self._get_net_demand(deterministic, errors, curtail)
 
         # Sample outages
-        if self.outages and (not deterministic):
+        if (self.outages and 
+            (not deterministic) and 
+            (self.availability.sum() > (self.num_gen - self.max_outages))):
             outage = self._sample_outage()
             self._update_availability(outage)
             
