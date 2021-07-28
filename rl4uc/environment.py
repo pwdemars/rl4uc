@@ -182,6 +182,7 @@ class Env(object):
 
         # Set up for curtailment
         self.curtailment = kwargs.get('curtailment', False)
+        self.curtailed_mwh = 0
         self.action_size = self.num_gen + int(self.curtailment)
 
     def _reset_availability(self):
@@ -260,6 +261,7 @@ class Env(object):
 
         if curtail:
             net_demand = demand_real
+            self.curtailed_mwh = wind_real * self.dispatch_resolution
         else: 
             net_demand = demand_real - wind_real
         net_demand = np.clip(net_demand, self.min_demand, max_demand)
@@ -310,13 +312,14 @@ class Env(object):
         # Get curtailment action (if using)
         if self.curtailment:
             curtail = bool(action[-1]) # last action 
-            action = np.delete(action, -1)
+            commitment_action = np.copy(action)[:-1]
         else:
             curtail = False
+            commitment_action = action
 
         # Check if action is legal and legalise if necessary
-        if self._is_legal(action) is False:
-            action = self._legalise_action(action)
+        if self._is_legal(commitment_action) is False:
+            commitment_action = self._legalise_action(commitment_action)
 
         # Advance demand 
         self.roll_forecasts()
@@ -332,7 +335,7 @@ class Env(object):
             self._update_availability(outage)
             
         # Update generator status
-        self.commitment = np.array(action)
+        self.commitment = np.array(commitment_action)
         self.update_gen_status(self.commitment)
         
         # Determine whether gens are constrained to remain on/off
@@ -340,7 +343,7 @@ class Env(object):
 
         # Calculate operating costs
         self.start_cost = self._calculate_start_costs()
-        self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, action, self.availability)
+        self.fuel_costs, self.disp = self.calculate_fuel_cost_and_dispatch(self.net_demand, commitment_action, self.availability)
         self.fuel_cost = np.sum(self.fuel_costs)
         self.kgco2 = self._calculate_kgco2(self.fuel_costs, self.disp)
         self.ens_cost = self.calculate_lost_load_cost(self.net_demand, self.disp, self.availability)
