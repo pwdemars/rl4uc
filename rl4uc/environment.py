@@ -192,11 +192,16 @@ class Env(object):
         self.availability -= outage
         self.availability = np.clip(self.availability, 0, 1)
 
-    def _sample_outage(self):
+    def _sample_outage(self, availability, commitment):
+
+        if availability.sum() <= (self.num_gen - self.max_outages):
+            # print(self.availability.sum(), self.num_gen, self.max_outages)
+            return np.zeros(self.num_gen)
+
         outage = np.random.binomial(1, self.outage_rate)
-        outage = outage * self.commitment # outages are only possible when generator is already on
+        outage = outage * commitment # outages are only possible when generator is already on
         if outage.sum() > 1: # only one outage at a time 
-            outage = self._sample_outage()
+            outage = self._sample_outage(availability, commitment)
         return outage
         
     def _determine_constraints(self):
@@ -331,9 +336,8 @@ class Env(object):
 
         # Sample outages
         if (self.outages and 
-            (not deterministic) and 
-            (self.availability.sum() > (self.num_gen - self.max_outages))):
-            outage = self._sample_outage()
+            (not deterministic)):
+            outage = self._sample_outage(self.availability, commitment_action)
             self._update_availability(outage)
             
         # Update generator status
