@@ -199,9 +199,9 @@ class Env(object):
 
     def _sample_outage(self, availability, commitment, status):
 
-        if availability.sum() <= (self.num_gen - self.max_outages):
-            # print(self.availability.sum(), self.num_gen, self.max_outages)
-            return np.zeros(self.num_gen)
+        # if availability.sum() <= (self.num_gen - self.max_outages):
+        #     # print(self.availability.sum(), self.num_gen, self.max_outages)
+        #     return np.zeros(self.num_gen)
 
         if self.weibull: 
             probs = weibull_min.pdf(status, self.gen_info.outage_weibull_shape, self.weibull_loc, self.weibull_scale)
