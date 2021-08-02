@@ -195,6 +195,8 @@ class Env(object):
     def _sample_outage(self):
         outage = np.random.binomial(1, self.outage_rate)
         outage = outage * self.commitment # outages are only possible when generator is already on
+        if outage.sum() > 1: # only one outage at a time 
+            outage = self._sample_outage()
         return outage
         
     def _determine_constraints(self):
