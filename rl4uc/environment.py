@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd 
 import os
 import json
+from scipy.stats import weibull_min
 
 from .dispatch import lambda_iteration
+
 
 DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
 
@@ -179,6 +181,9 @@ class Env(object):
         else:
             self.outage_rate = np.zeros(self.num_gen)
         self._reset_availability()
+        self.weibull = True
+        self.weibull_loc = 0
+        self.weibull_scale = 100
 
         # Set up for curtailment
         self.curtailment = kwargs.get('curtailment', False)
@@ -192,16 +197,21 @@ class Env(object):
         self.availability -= outage
         self.availability = np.clip(self.availability, 0, 1)
 
-    def _sample_outage(self, availability, commitment):
+    def _sample_outage(self, availability, commitment, status):
 
         if availability.sum() <= (self.num_gen - self.max_outages):
             # print(self.availability.sum(), self.num_gen, self.max_outages)
             return np.zeros(self.num_gen)
 
-        outage = np.random.binomial(1, self.outage_rate)
+        if self.weibull: 
+            probs = weibull_min.pdf(status, self.gen_info.outage_weibull_shape, self.weibull_loc, self.weibull_scale)
+        else:
+            probs = self.outage_rate
+
+        outage = np.random.binomial(1, probs)
         outage = outage * commitment # outages are only possible when generator is already on
         if outage.sum() > 1: # only one outage at a time 
-            outage = self._sample_outage(availability, commitment)
+            outage = self._sample_outage(availability, commitment, status)
         return outage
         
     def _determine_constraints(self):
@@ -337,7 +347,7 @@ class Env(object):
         # Sample outages
         if (self.outages and 
             (not deterministic)):
-            outage = self._sample_outage(self.availability, commitment_action)
+            outage = self._sample_outage(self.availability, commitment_action, self.status)
             self._update_availability(outage)
             
         # Update generator status
