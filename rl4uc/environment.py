@@ -281,6 +281,7 @@ class Env(object):
             self.curtailed_mwh = wind_real * self.dispatch_resolution
         else: 
             net_demand = demand_real - wind_real
+            self.curtailed_mwh = 0
         net_demand = np.clip(net_demand, self.min_demand, max_demand)
         return net_demand
 
