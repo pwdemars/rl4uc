@@ -181,12 +181,13 @@ class Env(object):
         else:
             self.outage_rate = np.zeros(self.num_gen)
         self._reset_availability()
-        self.weibull = True
+        self.weibull = False
         self.weibull_loc = 0
         self.weibull_scale = 100
 
         # Set up for curtailment
         self.curtailment = kwargs.get('curtailment', False)
+        self.curtail_size_mw = kwargs.get('curtail_size_mw', 100000)
         self.curtailed_mwh = 0
         self.action_size = self.num_gen + int(self.curtailment)
 
@@ -277,8 +278,9 @@ class Env(object):
             max_demand = self.max_demand
 
         if curtail:
-            net_demand = demand_real
-            self.curtailed_mwh = wind_real * self.dispatch_resolution
+            wind_curtailed = np.maximum(0, wind_real - self.curtail_size_mw)
+            net_demand = demand_real - np.maximum(0, wind_curtailed)
+            self.curtailed_mwh = wind_curtailed * self.dispatch_resolution
         else: 
             net_demand = demand_real - wind_real
             self.curtailed_mwh = 0
