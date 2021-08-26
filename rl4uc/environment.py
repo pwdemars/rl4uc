@@ -203,16 +203,16 @@ class Env(object):
 
     def _sample_outage(self, availability, commitment, status):
 
-        # if availability.sum() <= (self.num_gen - self.max_outages):
-        #     # print(self.availability.sum(), self.num_gen, self.max_outages)
-        #     return np.zeros(self.num_gen)
-
         if self.weibull: 
+            # note: when status < 0, probability = 0
             probs = weibull_min.pdf(status, self.gen_info.outage_weibull_shape, self.weibull_loc, self.weibull_scale)
         else:
             probs = self.outage_rate
 
         outage = np.random.binomial(1, probs)
+        # Generator experience an outage if: 
+        #   1. going from on --> off (status > 0, commitment == 0)
+        #   2. going from off --> on (status < 0, commitment == 1), since probs(x<1)=0 (see note above)
         outage = outage * commitment # outages are only possible when generator is already on
         if outage.sum() > 1: # only one outage at a time 
             outage = self._sample_outage(availability, commitment, status)
