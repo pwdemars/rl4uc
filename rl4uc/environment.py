@@ -76,12 +76,10 @@ def update_cost_coefs(gen_info, usd_per_kgco2):
     gen_info.c *= (1 + factor)
 
 class Env(object):
-    """
-    Environment class holding information about the grid state, the demand 
-    forecast, the generator information. Methods include calculating costs of
-    actions; advancing grid in response to actions. 
-    
-    TODO: wind
+    """ 
+    Simulation environment for the UC problem.
+
+    Methods include calculating costs of actions; advancing grid in response to actions. 
     """
     def __init__(self, gen_info, profiles_df,
                  mode='train', **kwargs):
@@ -90,7 +88,7 @@ class Env(object):
         self.gen_info = gen_info
         self.profiles_df = profiles_df
         
-        self.voll = kwargs.get('voll', DEFAULT_VOLL)
+        self.voll = kwargs.get('voll', DEFAULT_VOLL) # value of lost load
         self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
@@ -115,19 +113,8 @@ class Env(object):
                                    sigma=arma_params['sigma_wind'],
                                    name='wind')
 
+        # Update the quadratic cost curves to account for carbon price 
         update_cost_coefs(self.gen_info, float(kwargs.get('usd_per_kgco2', 0.)))
-        
-        # Penalty factor for committing excess capacity, usedi n training reward function 
-#         self.excess_capacity_penalty_factor = (self.num_gen * 
-#                                                kwargs.get('excess_capacity_penalty_factor', 
-#                                                                DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR) *
-#                                                self.dispatch_resolution)
-
-        if mode == 'train':
-            # Startup costs are multiplied by this factor in the reward function. 
-            self.startup_multiplier = kwargs.get('startup_multiplier', DEFAULT_STARTUP_MULTIPLIER)
-        else:
-            self.startup_multiplier = 1
 
         # Generator info 
         self.max_output = self.gen_info['max_output'].to_numpy()
@@ -148,8 +135,7 @@ class Env(object):
         self.min_demand = np.max(self.min_output)
         self.max_demand = np.sum(self.max_output) 
         
-        self.forecast_length = kwargs.get('forecast_length', max(self.t_min_down))
-        
+        # Tolerance parameter for lambda-iteration 
         self.dispatch_tolerance = 1 # epsilon for lambda iteration.
 
         # Max cost per mwh
@@ -161,7 +147,7 @@ class Env(object):
         self.forecast = None
         self.start_cost = 0
         self.infeasible=False
-        self.day_cost = 0 # cost for the entire day 
+        self.day_cost = 0 # cost for the entire day 
 
         # Min reward is a function of number of generators and episode length
         self.min_reward = (kwargs.get('min_reward_scale', DEFAULT_MIN_REWARD_SCALE) *
@@ -224,7 +210,6 @@ class Env(object):
         """
         self.must_on = np.array([True if 0 < self.status[i] < self.t_min_up[i] else False for i in range(self.num_gen)])
         self.must_off = np.array([True if -self.t_min_down[i] < self.status[i] < 0 else False for i in range(self.num_gen)])
-        # self.must_off = np.logical_or(self.must_off, np.logical_not(self.availability)) # if outage then must be off
         
     def _legalise_action(self, action):
         """
@@ -244,10 +229,6 @@ class Env(object):
         illegal_on = np.any(action[self.must_on] == 0)
         illegal_off = np.any(action[self.must_off] == 1)
         if any([illegal_on, illegal_off]):
-            # print("Illegal action")
-            # print("Action: {}".format(action))
-            # print("Must on: {}".format(self.must_on))
-            # print("Must off: {}".format(self.must_off))
             return False
         else:
             return True
