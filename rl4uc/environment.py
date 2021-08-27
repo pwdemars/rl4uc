@@ -167,7 +167,7 @@ class Env(object):
         else:
             self.outage_rate = np.zeros(self.num_gen)
         self._reset_availability()
-        self.weibull = False
+        self.weibull = True # use Weibull by default
         self.weibull_loc = 0
         self.weibull_scale = 100
 
