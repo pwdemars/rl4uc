@@ -79,3 +79,18 @@ print("Finished? {}".format(done))
 print("Reward: {:.2f}".format(reward))
 ```
 
+## Citing
+
+Users of the repository should cite the following paper, which was the first to present and employ `rl4uc`: 
+
+```
+@article{de2021applying,
+  title={Applying reinforcement learning and tree search to the unit commitment problem},
+  author={de Mars, Patrick and O’Sullivan, Aidan},
+  journal={Applied Energy},
+  volume={302},
+  pages={117519},
+  year={2021},
+  publisher={Elsevier}
+}
+```
