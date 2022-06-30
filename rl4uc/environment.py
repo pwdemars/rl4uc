@@ -558,7 +558,7 @@ class Env(object):
         
         # Initalise grid status and constraints
         if self.mode == "train": 
-            min_max = np.array([self.t_min_down, -self.t_min_up]).transpose()
+            min_max = np.array([-self.t_min_down, self.t_min_up]).transpose()
             self.status = np.array([x[np.random.randint(2)] for x in min_max])
         else:
             self.status = self.gen_info['status'].to_numpy()
@@ -650,7 +650,7 @@ def scale_and_interpolate_profiles(num_gen,
 
 def make_env(mode='train', profiles_df=None, **params):
     """
-    Create an environment object.
+    Create an environment instance 
     """
     script_dir = os.path.dirname(os.path.realpath(__file__))
     gen_info = create_gen_info(params.get('num_gen', DEFAULT_NUM_GEN),
@@ -659,7 +659,8 @@ def make_env(mode='train', profiles_df=None, **params):
         if profiles_df is None:
             profiles_df = pd.read_csv(os.path.join(script_dir, DEFAULT_PROFILES_FN))
     
-        profiles_df.demand = profiles_df.demand * len(gen_info)/10 # Scale up or down depending on number of generators.    
+        # Scale up or down depending on number of generators (default is 10 gens)
+        profiles_df.demand = profiles_df.demand * len(gen_info)/10     
         profiles_df.wind = profiles_df.wind * len(gen_info)/10
     
     if mode == 'test' and profiles_df is None:
@@ -673,7 +674,7 @@ def make_env(mode='train', profiles_df=None, **params):
 
 def make_env_from_json(env_name='5gen', mode='train', profiles_df=None):
     """
-    Create an environment object.
+    Create an environment instance using parameters set in a .json file 
     """
     script_dir = os.path.dirname(os.path.realpath(__file__))
     env_fn = os.path.join(script_dir, 'data/envs/{}.json'.format(env_name))
