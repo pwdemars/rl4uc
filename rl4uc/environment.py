@@ -190,7 +190,7 @@ class Env(object):
         self.availability += repair 
         self.availability = np.clip(self.availability, 0, 1)
 
-    def _sample_outage(self, commitment, status):
+    def _sample_outage(self, commitment, availability, status):
 
         if self.weibull: 
             # note: when status < 0, probability = 0
@@ -202,9 +202,9 @@ class Env(object):
         # Generator experience an outage if: 
         #   1. going from on --> off (status > 0, commitment == 0)
         #   2. going from off --> on (status < 0, commitment == 1), since probs(x<1)=0 (see note above)
-        outage = outage * commitment # outages are only possible when generator is already on
+        outage = outage * commitment * availability # outages are only possible when generator is already on
         if outage.sum() > 1: # only one outage at a time 
-            outage = self._sample_outage(commitment, status)
+            outage = self._sample_outage(commitment, availability, status)
         return outage
 
     def _sample_repair(self, availability):
@@ -343,7 +343,7 @@ class Env(object):
         # Sample outages
         if (self.outages and 
             (not deterministic)):
-            self.outage = self._sample_outage(commitment_action, self.status)
+            self.outage = self._sample_outage(commitment_action, self.availability, self.status)
         else: 
             self.outage = np.zeros(self.num_gen)
 
