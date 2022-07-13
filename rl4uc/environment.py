@@ -480,14 +480,18 @@ class Env(object):
         fuel_costs = self._calculate_fuel_costs(disp, commitment)
         
         return fuel_costs, disp
-
-
+        
     def _calculate_kgco2(self, fuel_costs, disp):
+        # Mask only those generators which are online 
+        mask = disp > 0
+        fuel_costs = fuel_costs[mask]
+        disp = disp[mask]
+
         e_out_mmbtu = disp * self.dispatch_resolution * self.mmbtu_per_mwh
-        usd_per_mmbtu_out = np.divide(fuel_costs, e_out_mmbtu, where=fuel_costs!=0)
+        usd_per_mmbtu_out = np.divide(fuel_costs, e_out_mmbtu)
         efficiency = (usd_per_mmbtu_out / 
-                      (self.gen_info.usd_per_mmbtu + self.usd_per_kgco2 * self.gen_info.kgco2_per_mmbtu))
-        kgco2 = e_out_mmbtu * efficiency * self.gen_info.kgco2_per_mmbtu
+                      (self.gen_info.usd_per_mmbtu.values[mask] + self.usd_per_kgco2 * self.gen_info.kgco2_per_mmbtu.values[mask]))
+        kgco2 = e_out_mmbtu * efficiency * self.gen_info.kgco2_per_mmbtu.values[mask]
         return np.sum(kgco2)
         
     def is_feasible(self): 
