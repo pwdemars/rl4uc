@@ -169,7 +169,7 @@ class Env(object):
             self.repair_rate = self.gen_info['repair_rate'].to_numpy()
 
         self._reset_availability()
-        self.weibull = kwargs.get('weibull', False) # use Weibull by default
+        self.weibull = kwargs.get('weibull', True) # use Weibull by default
         self.weibull_loc = 0
         self.weibull_scale = 100
 
