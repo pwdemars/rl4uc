@@ -1,0 +1,18 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.9'
+        architecture: 'x64'
+    - name: Install the library
+      run: |
+        pip install -e .
+    - name: Test
+      run: |
+        cd tests
+        pytest

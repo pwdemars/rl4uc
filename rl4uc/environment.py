@@ -161,13 +161,15 @@ class Env(object):
 
         # Set up for outages
         self.outages = kwargs.get('outages', False)
-        if kwargs.get('outages', False):
+        self.repairs = kwargs.get('repairs', False)
+        if self.outages:
             self.outage_rate = self.gen_info['outage_rate'].to_numpy()
-            self.max_outages = int(self.num_gen)/10
-        else:
-            self.outage_rate = np.zeros(self.num_gen)
+
+        if self.repairs:
+            self.repair_rate = self.gen_info['repair_rate'].to_numpy()
+
         self._reset_availability()
-        self.weibull = True # use Weibull by default
+        self.weibull = kwargs.get('weibull', False) # use Weibull by default
         self.weibull_loc = 0
         self.weibull_scale = 100
 
@@ -183,11 +185,12 @@ class Env(object):
     def _reset_availability(self):
         self.availability = np.ones(self.num_gen)
 
-    def _update_availability(self, outage):
+    def _update_availability(self, outage, repair):
         self.availability -= outage
+        self.availability += repair 
         self.availability = np.clip(self.availability, 0, 1)
 
-    def _sample_outage(self, availability, commitment, status):
+    def _sample_outage(self, commitment, availability, status):
 
         if self.weibull: 
             # note: when status < 0, probability = 0
@@ -199,10 +202,15 @@ class Env(object):
         # Generator experience an outage if: 
         #   1. going from on --> off (status > 0, commitment == 0)
         #   2. going from off --> on (status < 0, commitment == 1), since probs(x<1)=0 (see note above)
-        outage = outage * commitment # outages are only possible when generator is already on
+        outage = outage * commitment * availability # outages are only possible when generator is already on
         if outage.sum() > 1: # only one outage at a time 
-            outage = self._sample_outage(availability, commitment, status)
+            outage = self._sample_outage(commitment, availability, status)
         return outage
+
+    def _sample_repair(self, availability):
+        repair = np.random.binomial(1, self.repair_rate)
+        repair = repair * np.logical_not(availability) # outages are only possible when generator is already on
+        return repair
         
     def _determine_constraints(self):
         """
@@ -335,8 +343,19 @@ class Env(object):
         # Sample outages
         if (self.outages and 
             (not deterministic)):
-            outage = self._sample_outage(self.availability, commitment_action, self.status)
-            self._update_availability(outage)
+            self.outage = self._sample_outage(commitment_action, self.availability, self.status)
+        else: 
+            self.outage = np.zeros(self.num_gen)
+
+        # Sample repair
+        if (self.repairs and 
+            (not deterministic)):
+            self.repair = self._sample_repair(self.availability)
+        else:
+            self.repair = np.zeros(self.num_gen)
+        
+
+        self._update_availability(self.outage, self.repair)
             
         # Update generator status
         self.commitment = np.array(commitment_action)
@@ -461,14 +480,18 @@ class Env(object):
         fuel_costs = self._calculate_fuel_costs(disp, commitment)
         
         return fuel_costs, disp
-
-
+        
     def _calculate_kgco2(self, fuel_costs, disp):
+        # Mask only those generators which are online 
+        mask = disp > 0
+        fuel_costs = fuel_costs[mask]
+        disp = disp[mask]
+
         e_out_mmbtu = disp * self.dispatch_resolution * self.mmbtu_per_mwh
-        usd_per_mmbtu_out = np.divide(fuel_costs, e_out_mmbtu, where=fuel_costs!=0)
+        usd_per_mmbtu_out = np.divide(fuel_costs, e_out_mmbtu)
         efficiency = (usd_per_mmbtu_out / 
-                      (self.gen_info.usd_per_mmbtu + self.usd_per_kgco2 * self.gen_info.kgco2_per_mmbtu))
-        kgco2 = e_out_mmbtu * efficiency * self.gen_info.kgco2_per_mmbtu
+                      (self.gen_info.usd_per_mmbtu.values[mask] + self.usd_per_kgco2 * self.gen_info.kgco2_per_mmbtu.values[mask]))
+        kgco2 = e_out_mmbtu * efficiency * self.gen_info.kgco2_per_mmbtu.values[mask]
         return np.sum(kgco2)
         
     def is_feasible(self): 

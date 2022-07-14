@@ -7,12 +7,14 @@ pkgs = {
     "required": [
         "numpy",
         "pandas",
+        "pytest",
+        "scipy"
     ]
 }
 
 setuptools.setup(
     name="rl4uc", 
-    version="0.1.2",
+    version="0.2.1",
     author="Patrick de Mars",
     author_email="pwdemars@gmail.com",
     description="Reinforcement learning environment for the unit commitment problem",

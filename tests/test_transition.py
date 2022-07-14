@@ -21,16 +21,15 @@ def test_reward_stochastic():
 	np.random.seed(1)
 	env = make_env(num_gen=5)
 	env.reset()
-
 	obs, reward, done = env.step(np.array([1,0,0,1,1]))
-	assert reward == -9457.870355350562, "reward was: {}".format(reward)
+	assert reward == -4727.870355350562, "reward was: {}".format(reward)
 
 def test_status_update():
 	np.random.seed(1)
 	env = make_env(num_gen=5)
 	env.reset()
 	obs, reward, done = env.step(np.ones(env.num_gen))
-	assert np.all(env.status == np.array([1, 11, 13,  1,  3]))
+	assert np.all(env.status == np.array([17, 1, 1, 7, 1]))
 
 def test_reward_deterministic(example_test_env):
 	example_test_env.reset()
@@ -49,7 +48,9 @@ def test_ens(example_test_env):
 	assert example_test_env.ens
 
 def test_kgco2():
-	env = make_env(usd_per_kgco2=0.1)
-	env.reset()
-	obs, reward, done = env.step(np.ones(env.num_gen))
-	assert np.isclose(env.kgco2, 122983.8132575362), "kgco2 was: {}".format(env.kgco2)
+    np.random.seed(123)
+    env = make_env(num_gen=5, outages=True, weibull=False, repairs=True)
+    env.reset() 
+    action = np.array([1,0,0,0,0])
+    env.step(action)
+    assert env.kgco2 == 309328.1115384615
