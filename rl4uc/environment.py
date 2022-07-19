@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd 
 import os
 import json
-from scipy.stats import weibull_min
+from scipy.stats import weibull_min, exponweib
 
 from .dispatch import lambda_iteration
 
@@ -169,10 +169,22 @@ class Env(object):
             self.repair_rate = self.gen_info['repair_rate'].to_numpy()
 
         self._reset_availability()
-        self.weibull = kwargs.get('weibull', True) # use Weibull by default
-        self.weibull_loc = 0
-        self.weibull_scale = 100
+        self.outages_model = kwargs.get('outages_model', 'weibull')
 
+        # Set up distribution for outages 
+        if self.outages: 
+            if self.outages_model == 'weibull': 
+                self.outages_dist = weibull_min(
+                    self.gen_info.outage_weibull_shape.values, 
+                    loc=0,
+                    scale=100)
+            elif self.outages_model == 'exp_weibull':
+                self.outages_dist = exponweib(
+                    self.gen_info.outage_exp_weibull_a.values, 
+                    self.gen_info.outage_exp_weibull_c.values, 
+                    loc=0, 
+                    scale=50) 
+                    
         # Set up for curtailment
         self.curtailment = kwargs.get('curtailment', False)
         self.curtail_size_mw = kwargs.get('curtail_size_mw', 100000)
@@ -192,9 +204,12 @@ class Env(object):
 
     def _sample_outage(self, commitment, availability, status):
 
-        if self.weibull: 
-            # note: when status < 0, probability = 0
-            probs = weibull_min.pdf(status, self.gen_info.outage_weibull_shape, self.weibull_loc, self.weibull_scale)
+        if self.outages_model == 'weibull': 
+            probs = self.outages_dist.pdf(status)
+        elif self.outages_model == 'exp_weibull':
+            F = self.outages_dist.cdf(status)
+            f = self.outages_dist.pdf(status)
+            probs = 0.25 * f / (1 - F)
         else:
             probs = self.outage_rate
 
