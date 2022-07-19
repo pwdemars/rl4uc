@@ -49,8 +49,24 @@ def test_ens(example_test_env):
 
 def test_kgco2():
     np.random.seed(123)
-    env = make_env(num_gen=5, outages=True, weibull=False, repairs=True)
+    env = make_env(num_gen=5)
     env.reset() 
     action = np.array([1,0,0,0,0])
     env.step(action)
     assert env.kgco2 == 309328.1115384615
+
+def test_outages_exp_weibull():
+	np.random.seed(13)
+	env = make_env(num_gen=10, outages=True, outages_model='exp_weibull', repairs=True)
+	env.reset() 
+	action = np.ones(env.num_gen)
+	env.step(action)
+	assert env.outage[4] == 1
+
+def test_outages_weibull():
+	np.random.seed(32)
+	env = make_env(num_gen=10, outages=True, outages_model='weibull', repairs=True)
+	env.reset() 
+	action = np.ones(env.num_gen)
+	env.step(action)
+	assert env.outage[3] == 1
