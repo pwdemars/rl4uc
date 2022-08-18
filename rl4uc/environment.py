@@ -308,7 +308,7 @@ class Env(object):
         if self.outages and (availability is not None):
             net_demand = np.minimum(np.dot(availability, self.max_output), net_demand)
 
-        diff = max(np.sum(disp) - net_demand, 0) # No penalty for over-delivery (managed by e.g. wind shed)
+        diff = max(net_demand - np.sum(disp), 0) # No penalty for over-delivery (managed by e.g. wind shed)
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
         return ens_cost
