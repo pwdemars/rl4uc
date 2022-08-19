@@ -9,9 +9,9 @@ from scipy.stats import weibull_min, exponweib
 from .dispatch import lambda_iteration
 
 
-DEFAULT_PROFILES_FN='data/train_data_10gen.csv'
+DEFAULT_PROFILES_FN='data/train_windy_10gen.csv'
 
-DEFAULT_VOLL=10000
+DEFAULT_VOLL=10000 # Set the value of lost load 
 DEFAULT_EPISODE_LENGTH_HRS=24
 DEFAULT_DISPATCH_RESOLUTION=0.5
 DEFAULT_DISPATCH_FREQ_MINS=30
@@ -19,15 +19,6 @@ DEFAULT_MIN_REWARD_SCALE=-5000
 DEFAULT_NUM_GEN=5
 DEFAULT_EXCESS_CAPACITY_PENALTY_FACTOR = 0
 DEFAULT_STARTUP_MULTIPLIER=1
-
-DEFAULT_ARMA_PARAMS={"p":5,
-                     "q":5,   
-                     "alphas_demand":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "alphas_wind":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
-                     "betas_demand":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "betas_wind":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
-                     "sigma_demand":10,
-                     "sigma_wind":6}
 
 class NStepARMA(object):
     """
@@ -98,6 +89,15 @@ class Env(object):
             self.episode_length = kwargs.get('episode_length_hrs', DEFAULT_EPISODE_LENGTH_HRS)
             self.episode_length = int(self.episode_length * (60 / self.dispatch_freq_mins))
 
+        DEFAULT_ARMA_PARAMS={"p":5,
+                            "q":5,   
+                            "alphas_demand":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
+                            "alphas_wind":[0.63004456, 0.23178044, 0.08526726, 0.03136807, 0.01153967],
+                            "betas_demand":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
+                            "betas_wind":[0.06364086, 0.02341217, 0.00861285, 0.00316849, 0.00116562],
+                            "sigma_demand":5. * self.num_gen / 10,
+                            "sigma_wind":25.  * self.num_gen / 10}
+
         # Set up the ARMA processes.
         arma_params = kwargs.get('arma_params', DEFAULT_ARMA_PARAMS)
         self.arma_demand = NStepARMA(p=arma_params['p'],
@@ -132,7 +132,7 @@ class Env(object):
         self.mmbtu_per_mwh = 3.412
         
         # Min and max demand for clipping demand profiles
-        self.min_demand = np.max(self.min_output)
+        self.min_demand = 0
         self.max_demand = np.sum(self.max_output) 
         
         # Tolerance parameter for lambda-iteration 
@@ -144,7 +144,7 @@ class Env(object):
         # Carbon emissions data 
         self.usd_per_kgco2 = float(kwargs.get('usd_per_kgco2', 0.)) # $20 per tonne 
         
-        self.forecast = None
+        self.demand_forecast = None
         self.start_cost = 0
         self.infeasible=False
         self.day_cost = 0 # cost for the entire day 
@@ -271,7 +271,7 @@ class Env(object):
             demand_error = self.arma_demand.step()
             wind_error = self.arma_wind.step()
 
-        demand_real = self.forecast + demand_error
+        demand_real = self.demand_forecast + demand_error
         demand_real = max(0, demand_real)
         self.demand_real = demand_real
 
@@ -300,7 +300,7 @@ class Env(object):
         Roll forecasts forward by one timestep
         """
         self.episode_timestep += 1 
-        self.forecast = self.episode_forecast[self.episode_timestep]
+        self.demand_forecast = self.episode_forecast[self.episode_timestep]
         self.wind_forecast = self.episode_wind_forecast[self.episode_timestep]
 
     def calculate_lost_load_cost(self, net_demand, disp, availability=None):
@@ -308,7 +308,7 @@ class Env(object):
         if self.outages and (availability is not None):
             net_demand = np.minimum(np.dot(availability, self.max_output), net_demand)
 
-        diff = max(np.sum(disp) - net_demand, 0) # No penalty for over-delivery (managed by e.g. wind shed)
+        diff = max(net_demand - disp.sum(), 0) # No penalty for over-delivery (managed by e.g. wind shed)
         ens_amount = diff if diff > self.dispatch_tolerance else 0
         ens_cost = ens_amount*self.voll*self.dispatch_resolution
         return ens_cost
@@ -586,7 +586,7 @@ class Env(object):
         
         # Resetting episode variables
         self.episode_timestep = -1
-        self.forecast = None
+        self.demand_forecast = None
         self.net_demand = None
         self.day_cost = 0
         

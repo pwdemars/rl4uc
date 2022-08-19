@@ -24,3 +24,9 @@ def test_arma_demand_initialisation(example_test_env):
 def test_arma_wind_initialisation(example_test_env):
 	example_test_env.reset()
 	assert np.all(example_test_env.arma_wind.xs == 0)
+
+def test_arma_sigma_scaling():
+	for n in [10, 20, 30]:
+		env = make_env(num_gen=n)
+		assert env.arma_wind.sigma == 10 * n / 10
+		assert env.arma_demand.sigma == 5 * n / 10
