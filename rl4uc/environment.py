@@ -12,6 +12,7 @@ from .dispatch import lambda_iteration
 DEFAULT_PROFILES_FN='data/train_windy_10gen.csv'
 
 DEFAULT_VOLL=10000 # Set the value of lost load 
+DEFAULT_WIND_SHED_COST=200
 DEFAULT_EPISODE_LENGTH_HRS=24
 DEFAULT_DISPATCH_RESOLUTION=0.5
 DEFAULT_DISPATCH_FREQ_MINS=30
@@ -80,6 +81,7 @@ class Env(object):
         self.profiles_df = profiles_df
         
         self.voll = kwargs.get('voll', DEFAULT_VOLL) # value of lost load
+        self.wind_shed_cost_per_mwh = kwargs.get('wind_shed_cost_per_mwh', DEFAULT_WIND_SHED_COST)
         self.dispatch_freq_mins = kwargs.get('dispatch_freq_mins', DEFAULT_DISPATCH_FREQ_MINS) # Dispatch frequency in minutes 
         self.dispatch_resolution = self.dispatch_freq_mins/60.
         self.num_gen = self.gen_info.shape[0]
@@ -308,10 +310,20 @@ class Env(object):
         if self.outages and (availability is not None):
             net_demand = np.minimum(np.dot(availability, self.max_output), net_demand)
 
-        diff = max(net_demand - disp.sum(), 0) # No penalty for over-delivery (managed by e.g. wind shed)
-        ens_amount = diff if diff > self.dispatch_tolerance else 0
-        ens_cost = ens_amount*self.voll*self.dispatch_resolution
-        return ens_cost
+        load_shed = max(net_demand - disp.sum(), 0)
+        wind_shed = max(disp.sum() - net_demand, 0)
+
+        load_shed = load_shed if load_shed > self.dispatch_tolerance else 0
+        wind_shed = wind_shed if wind_shed > self.dispatch_tolerance else 0
+
+        if load_shed > wind_shed: 
+            cost = load_shed * self.voll * self.dispatch_resolution
+        elif wind_shed > load_shed: 
+            cost = wind_shed * self.wind_shed_cost_per_mwh * self.dispatch_resolution
+        else:
+            cost = 0
+
+        return cost
 
     def _get_state(self):
         """
@@ -347,6 +359,7 @@ class Env(object):
 
         # Check if action is legal and legalise if necessary
         if self._is_legal(commitment_action) is False:
+            print("ILLEGAL")
             commitment_action = self._legalise_action(commitment_action)
 
         # Advance demand 
